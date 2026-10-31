@@ -91,7 +91,7 @@ export function Analytics() {
     : "0.0";
 
   const COLORS = {
-    primary: ['#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'],
+    primary: ['#0d9488', '#60A5FA', '#93C5FD', '#BFDBFE'],
     status: ['#EAB308', '#3B82F6', '#F97316', '#10B981', '#EF4444'],
     urgency: ['#EF4444', '#F59E0B', '#10B981'],
   };
@@ -151,7 +151,7 @@ export function Analytics() {
                   color: isDark ? '#F3F4F6' : '#111827'
                 }}
               />
-              <Bar dataKey="value" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="value" fill="#0d9488" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -205,7 +205,7 @@ export function Analytics() {
                   color: isDark ? '#F3F4F6' : '#111827'
                 }}
               />
-              <Line type="monotone" dataKey="issues" stroke="#3B82F6" strokeWidth={3} dot={{ fill: '#3B82F6', r: 5 }} />
+              <Line type="monotone" dataKey="issues" stroke="#0d9488" strokeWidth={3} dot={{ fill: '#0d9488', r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

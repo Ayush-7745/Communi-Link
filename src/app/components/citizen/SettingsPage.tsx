@@ -70,10 +70,10 @@ export function SettingsPage() {
                   type="button"
                   onClick={() => setTheme(themeOption.value as any)}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${theme === themeOption.value
-                    ? 'border-[#3B82F6] bg-blue-50'
+                    ? 'border-[#0d9488] bg-blue-50'
                     : isDark
-                      ? 'border-gray-600 hover:border-[#3B82F6]'
-                      : 'border-gray-200 hover:border-[#3B82F6]'
+                      ? 'border-gray-600 hover:border-[#0d9488]'
+                      : 'border-gray-200 hover:border-[#0d9488]'
                     }`}
                 >
                   <Icon className={`w-6 h-6 ${isDark ? 'text-gray-300' : 'text-gray-700'}`} />
@@ -97,7 +97,7 @@ export function SettingsPage() {
                 type="text"
                 value={userProfile?.fullName || ""}
                 onChange={(e) => updateUserProfile({ fullName: e.target.value })}
-                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
             </div>
           </div>
@@ -110,7 +110,7 @@ export function SettingsPage() {
                 type="email"
                 value={userProfile?.email || ""}
                 onChange={(e) => updateUserProfile({ email: e.target.value })}
-                className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-green-600">
                 <CheckCircle className="w-4 h-4" />
@@ -127,7 +127,7 @@ export function SettingsPage() {
                 type="tel"
                 value={userProfile?.phone || ""}
                 onChange={(e) => updateUserProfile({ phone: e.target.value })}
-                className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-green-600">
                 <CheckCircle className="w-4 h-4" />
@@ -146,11 +146,11 @@ export function SettingsPage() {
                   className="w-20 h-20 rounded-full object-cover"
                 />
               ) : userProfile?.fullName ? (
-                <div className="w-20 h-20 bg-[#3B82F6] rounded-full flex items-center justify-center text-white text-2xl">
+                <div className="w-20 h-20 bg-[#0d9488] rounded-full flex items-center justify-center text-white text-2xl">
                   {userProfile.fullName.charAt(0)}
                 </div>
               ) : (
-                <div className="w-20 h-20 bg-[#3B82F6] rounded-full flex items-center justify-center text-white text-2xl">
+                <div className="w-20 h-20 bg-[#0d9488] rounded-full flex items-center justify-center text-white text-2xl">
                   U
                 </div>
               )}
@@ -186,7 +186,7 @@ export function SettingsPage() {
                 type="password"
                 value={passwordData.currentPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                 placeholder="Enter current password"
               />
             </div>
@@ -200,7 +200,7 @@ export function SettingsPage() {
                 type="password"
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                 placeholder="Enter new password"
               />
             </div>
@@ -214,7 +214,7 @@ export function SettingsPage() {
                 type="password"
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                 placeholder="Confirm new password"
               />
             </div>
@@ -222,7 +222,7 @@ export function SettingsPage() {
 
           <button
             type="submit"
-            className="px-6 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors"
+            className="px-6 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors"
           >
             Change Password
           </button>
@@ -254,7 +254,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, emailNotifications: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
 
@@ -273,7 +273,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, appNotifications: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
 
@@ -292,7 +292,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, smsAlerts: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
 
@@ -303,7 +303,7 @@ export function SettingsPage() {
                 type="checkbox"
                 checked={settings.issueUpdates}
                 onChange={(e) => setSettings({ ...settings, issueUpdates: e.target.checked })}
-                className="w-4 h-4 accent-[#3B82F6]"
+                className="w-4 h-4 accent-[#0d9488]"
               />
               <label className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Issue updates</label>
             </div>
@@ -312,7 +312,7 @@ export function SettingsPage() {
                 type="checkbox"
                 checked={settings.volunteerAssignment}
                 onChange={(e) => setSettings({ ...settings, volunteerAssignment: e.target.checked })}
-                className="w-4 h-4 accent-[#3B82F6]"
+                className="w-4 h-4 accent-[#0d9488]"
               />
               <label className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Volunteer assignment</label>
             </div>
@@ -321,7 +321,7 @@ export function SettingsPage() {
                 type="checkbox"
                 checked={settings.issueCompletion}
                 onChange={(e) => setSettings({ ...settings, issueCompletion: e.target.checked })}
-                className="w-4 h-4 accent-[#3B82F6]"
+                className="w-4 h-4 accent-[#0d9488]"
               />
               <label className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Issue completion</label>
             </div>
@@ -348,7 +348,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, profileVisibility: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
 
@@ -367,7 +367,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, hidePersonalDetails: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
 
@@ -391,7 +391,7 @@ export function SettingsPage() {
             </div>
             <span className={`px-3 py-1 ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'} text-sm rounded-full`}>Verified</span>
           </div>
-          <button className="text-sm text-[#3B82F6] hover:underline">Re-upload ID Proof</button>
+          <button className="text-sm text-[#0d9488] hover:underline">Re-upload ID Proof</button>
         </div>
       </div>
 
@@ -404,7 +404,7 @@ export function SettingsPage() {
             <select
               value={settings.language}
               onChange={(e) => setSettings({ ...settings, language: e.target.value })}
-              className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+              className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
             >
               <option value="English">English</option>
               <option value="Hindi">Hindi</option>
@@ -416,7 +416,7 @@ export function SettingsPage() {
             <select
               value={settings.fontSize}
               onChange={(e) => setSettings({ ...settings, fontSize: e.target.value })}
-              className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+              className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
             >
               <option value="small">Small</option>
               <option value="medium">Medium</option>
@@ -436,7 +436,7 @@ export function SettingsPage() {
                 onChange={(e) => setSettings({ ...settings, highContrast: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0d9488]"></div>
             </label>
           </div>
         </div>

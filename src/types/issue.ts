@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase/firestore";
-
 export interface Issue {
   id?: string;
   title: string;
@@ -18,13 +16,18 @@ export interface Issue {
 
   lat: number;
   lng: number;
+  locationAddress?: string;
   geohash?: string;
 
   imageUrl?: string;
+  imageBlob?: string;
+  completionProofBlob?: string;
   proofImages?: string[];
   volunteerNotes?: string;
   deadline?: string;
 
   createdAt?: any;
   completedAt?: any;
+  assignedAt?: any;
+  updatedAt?: any;
 }

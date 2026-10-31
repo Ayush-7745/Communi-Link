@@ -1,11 +1,12 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import { db, auth } from "../../config/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
+import { auth } from "../../config/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { geohashForLocation } from "geofire-common";
-import { updateDoc } from "firebase/firestore";
+import { api, ApiError, pollEvery, resolveLocation } from "../../services/api";
+import { useGeolocation } from "../../hooks/useGeolocation";
+import { toast } from "sonner";
 
-interface UserProfile {
+export interface UserProfile {
   userId: string;
   fullName: string;
   email: string;
@@ -13,114 +14,138 @@ interface UserProfile {
   profilePhoto?: string | null;
   points?: number;
   role?: "citizen" | "volunteer" | "ngo";
-  location?: { lat: number, lng: number } | string;
+  location?: { lat: number, lng: number, address?: string } | string;
   geohash?: string;
 }
 
 interface UserContextType {
   userProfile: UserProfile | null;
+  authUser: User | null;
   authLoading: boolean;
+  authProfileError: boolean;
+  authProfileMissing: boolean;
+  setUserProfile: (profile: UserProfile | null) => void;
+  clearSessionState: () => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   uploadProfilePhoto: (file: File) => void;
   currentUserLocation: { lat: number, lng: number } | null;
+  currentUserLocationAddress: string | null;
+  isDetectingLocation: boolean;
+  locationError: string;
+  detectCurrentLocation: () => Promise<void>;
+  selectCurrentLocation: (location: { lat: number, lng: number }) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authProfileError, setAuthProfileError] = useState(false);
+  const [authProfileMissing, setAuthProfileMissing] = useState(false);
   // True until Firebase confirms auth state for the first time (prevents login flash on refresh)
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentUserLocation, setCurrentUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const authChangeId = useRef(0);
+  const geolocation = useGeolocation();
 
-  // 🔥 AUTH LISTENER
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const docSnap = await getDoc(doc(db, "users", user.uid));
+    let stopProfilePolling: (() => void) | null = null;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const currentChangeId = ++authChangeId.current;
+      geolocation.clearLocation();
+      stopProfilePolling?.();
+      stopProfilePolling = null;
+      setAuthLoading(true);
+      setAuthUser(user);
+      setUserProfile(null);
+      setAuthProfileError(false);
+      setAuthProfileMissing(false);
 
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data() as UserProfile);
-        }
-      } else {
-        setUserProfile(null);
+      if (user) {
+        stopProfilePolling = pollEvery(
+          api.getProfile,
+          (profile) => {
+            if (currentChangeId !== authChangeId.current) return;
+            setUserProfile(profile as unknown as UserProfile);
+            setAuthProfileError(false);
+            setAuthProfileMissing(false);
+            setAuthLoading(false);
+          },
+          (error) => {
+            if (error instanceof ApiError && error.status === 403) {
+              if (currentChangeId === authChangeId.current) {
+                setUserProfile(null);
+                setAuthProfileError(false);
+                setAuthProfileMissing(true);
+                setAuthLoading(false);
+              }
+              return;
+            }
+            console.error('Unable to load authenticated user profile:', error);
+            if (currentChangeId === authChangeId.current) {
+              setUserProfile(null);
+              setAuthProfileError(true);
+              setAuthProfileMissing(false);
+              setAuthLoading(false);
+            }
+          }
+        );
+      } else if (currentChangeId === authChangeId.current) {
+        setAuthLoading(false);
       }
-      // Auth state is now known — stop blocking route guards
-      setAuthLoading(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribe();
+      stopProfilePolling?.();
+    };
+  }, [geolocation.clearLocation]);
 
-  // 🔥 REALTIME UPDATE (points etc.)
+  const storedLocation = resolveLocation(userProfile?.location);
+  const currentUserLocation = geolocation.location
+    ? { lat: geolocation.location.lat, lng: geolocation.location.lng }
+    : storedLocation || null;
+
   useEffect(() => {
     if (!userProfile?.userId) return;
+    if (!geolocation.location) return;
 
-    const unsubscribe = onSnapshot(
-      doc(db, "users", userProfile?.userId),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setUserProfile((prev) => ({
-            ...prev!,
-            ...docSnap.data(),
-          }));
+    const { lat, lng, address } = geolocation.location;
+    const previous = resolveLocation(userProfile.location);
+    const R = 6371e3;
+    const distance = previous
+      ? R * 2 * Math.asin(Math.sqrt(
+        Math.sin(((lat - previous.lat) * Math.PI / 180) / 2) ** 2
+        + Math.cos(previous.lat * Math.PI / 180)
+          * Math.cos(lat * Math.PI / 180)
+          * Math.sin(((lng - previous.lng) * Math.PI / 180) / 2) ** 2
+      ))
+      : Number.POSITIVE_INFINITY;
+    const previousAddress = typeof userProfile.location === 'object'
+      ? userProfile.location.address
+      : undefined;
+    if (distance <= 100 && previousAddress === address) return;
+
+    let active = true;
+    const saveLocation = async () => {
+      try {
+        const geohash = geohashForLocation([lat, lng]);
+        await api.updateProfile({ location: { lat, lng, address }, geohash });
+        if (active) {
+          setUserProfile((profile) => profile
+            ? { ...profile, location: { lat, lng, address }, geohash }
+            : profile);
         }
+      } catch (error) {
+        console.error('Unable to save detected location:', error);
+        toast.error('Unable to save your location. You can still use the selected map location.');
       }
-    );
-
-    return () => unsubscribe();
-  }, [userProfile?.userId]);
-
-  // 🔥 WATCH LOCATION AND SYNC TO FIRESTORE
-  useEffect(() => {
-    if (!userProfile?.userId) return;
-    if (userProfile.role !== 'ngo' && userProfile.role !== 'volunteer') return;
-    if (!('geolocation' in navigator)) return;
-
-    const watchId = navigator.geolocation.watchPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setCurrentUserLocation({ lat, lng });
-
-        // Update Firestore if location changed significantly (e.g., > 100 meters)
-        // For simplicity, we just update it if we don't have one, or periodically.
-        // To avoid spamming Firestore on every minor GPS drift, we can compare distance.
-        const R = 6371e3; // metres
-        let shouldUpdate = false;
-        
-        if (!userProfile.location || typeof userProfile.location !== 'object') {
-          shouldUpdate = true;
-        } else {
-          const oldLat = userProfile.location.lat;
-          const oldLng = userProfile.location.lng;
-          if (typeof oldLat === 'number' && typeof oldLng === 'number') {
-            const φ1 = oldLat * Math.PI/180, φ2 = lat * Math.PI/180, Δλ = (lng-oldLng) * Math.PI/180;
-            const d = Math.acos( Math.sin(φ1)*Math.sin(φ2) + Math.cos(φ1)*Math.cos(φ2) * Math.cos(Δλ) ) * R;
-            if (d > 100) shouldUpdate = true; // moved more than 100m
-          } else {
-            shouldUpdate = true;
-          }
-        }
-
-        if (shouldUpdate) {
-          try {
-            const hash = geohashForLocation([lat, lng]);
-            await updateDoc(doc(db, "users", userProfile.userId), {
-              location: { lat, lng },
-              geohash: hash
-            });
-          } catch (error) {
-            console.error("Error updating location:", error);
-          }
-        }
-      },
-      (error) => console.warn('Geolocation error:', error),
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [userProfile?.userId, userProfile?.role, userProfile?.location]);
+    };
+    void saveLocation();
+    return () => {
+      active = false;
+    };
+  }, [userProfile?.userId, geolocation.location?.lat, geolocation.location?.lng, geolocation.location?.address]);
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
     setUserProfile((prev) => prev ? { ...prev, ...updates } : prev);
@@ -136,8 +161,38 @@ export function UserProvider({ children }: { children: ReactNode }) {
     reader.readAsDataURL(file);
   };
 
+  const clearSessionState = () => {
+    authChangeId.current += 1;
+    setUserProfile(null);
+    setAuthUser(null);
+    setAuthProfileError(false);
+    setAuthProfileMissing(false);
+    setAuthLoading(false);
+    geolocation.clearLocation();
+  };
+
   return (
-    <UserContext.Provider value={{ userProfile, authLoading, updateUserProfile, uploadProfilePhoto, currentUserLocation }}>
+    <UserContext.Provider value={{
+      userProfile,
+      authUser,
+      authLoading,
+      authProfileError,
+      authProfileMissing,
+      setUserProfile,
+      clearSessionState,
+      updateUserProfile,
+      uploadProfilePhoto,
+      currentUserLocation,
+      currentUserLocationAddress: geolocation.location?.address
+        || (typeof userProfile?.location === 'object' ? userProfile.location.address : null)
+        || (currentUserLocation
+          ? `${currentUserLocation.lat.toFixed(5)}, ${currentUserLocation.lng.toFixed(5)}`
+          : null),
+      isDetectingLocation: geolocation.isDetecting,
+      locationError: geolocation.errorMessage,
+      detectCurrentLocation: geolocation.detectLocation,
+      selectCurrentLocation: geolocation.setLocation,
+    }}>
       {children}
     </UserContext.Provider>
   );

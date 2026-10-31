@@ -1,98 +1,14 @@
 import { useState, useEffect } from "react";
 import { useIssues } from "../../contexts/IssuesContext";
 import { useUser } from "../../contexts/UserContext";
-import { Timestamp } from "firebase/firestore";
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { useMap } from "react-leaflet";
-import { doc, updateDoc, increment } from "firebase/firestore";
-import { db } from "../../../config/firebase";
-import { useNotifications } from "../../contexts/NotificationContext";
-
-function LocationPicker({ setForm }: any) {
-    useMapEvents({
-        click(e: { latlng: { lat: number; lng: number } }) {
-            const { lat, lng } = e.latlng;
-
-            setForm((prev: any) => ({
-                ...prev,
-                lat,
-                lng,
-                location: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-            }));
-        },
-    });
-
-
-    return null;
-}
-function RecenterMap({ position }: { position: [number, number] }) {
-    const map = useMap();
-
-    useEffect(() => {
-        map.setView(position, 13);
-    }, [position]);
-
-    return null;
-}
-
-
-
-
-import { useRef } from "react";
-import type { Map as LeafletMap } from "leaflet";
+import { LocationPickerMap } from "../LocationPickerMap";
+import { useGeolocation } from "../../../hooks/useGeolocation";
 
 export function ReportIssue() {
-    const { addIssue, issues } = useIssues();
-    const { userProfile, currentUserLocation } = useUser();
-    const [position, setPosition] = useState<[number, number] | null>(
-        currentUserLocation ? [currentUserLocation.lat, currentUserLocation.lng] : null
-    );
-    const { addNotification } = useNotifications();
-    const mapRef = useRef<LeafletMap | null>(null);
-
-    useEffect(() => {
-        return () => {
-            if (mapRef.current) {
-                mapRef.current.remove();
-                mapRef.current = null;
-            }
-        };
-    }, []);
-
-    useEffect(() => {
-        if (currentUserLocation) {
-            const coords: [number, number] = [currentUserLocation.lat, currentUserLocation.lng];
-            setPosition(coords);
-            setForm((prev: any) => ({
-                ...prev,
-                lat: coords[0],
-                lng: coords[1],
-                location: `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`
-            }));
-        } else {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const coords: [number, number] = [
-                        pos.coords.latitude,
-                        pos.coords.longitude,
-                    ];
-
-                    setPosition(coords);
-
-                    setForm((prev: any) => ({
-                        ...prev,
-                        lat: coords[0],
-                        lng: coords[1],
-                        location: `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`
-                    }));
-                },
-                (err) => {
-                    console.log("Location error:", err);
-                }
-            );
-        }
-    }, [currentUserLocation]);
+    const { addIssue } = useIssues();
+    const { userProfile } = useUser();
+    const geo = useGeolocation();
 
     const [form, setForm] = useState({
         title: "",
@@ -100,10 +16,25 @@ export function ReportIssue() {
         category: "",
         urgency: "Low" as "Low" | "Medium" | "High",
         imageUrl: "",
-        location: currentUserLocation ? `${currentUserLocation.lat.toFixed(5)}, ${currentUserLocation.lng.toFixed(5)}` : "",
-        lat: currentUserLocation?.lat || 0,
-        lng: currentUserLocation?.lng || 0,
+        location: "",
+        lat: 0,
+        lng: 0,
     });
+
+    useEffect(() => {
+        void geo.detectLocation();
+    }, []);
+
+    useEffect(() => {
+        if (!geo.location) return;
+        const { lat, lng, address } = geo.location;
+        setForm((previous) => ({
+            ...previous,
+            lat,
+            lng,
+            location: address,
+        }));
+    }, [geo.location?.lat, geo.location?.lng, geo.location?.address]);
 
     const handleSubmit = async () => {
         if (!form.title || !form.description || !form.category) {
@@ -111,19 +42,30 @@ export function ReportIssue() {
             return;
         }
 
+        if (!geo.location) {
+            alert("Select a location on the map or detect your location first.");
+            return;
+        }
+
         if (!userProfile?.userId) return;
 
-        addIssue({
-            title: form.title,
-            description: form.description,
-            category: form.category,
-            urgency: form.urgency,
-            imageUrl: form.imageUrl,
-            lat: form.lat,
-            lng: form.lng,
-            assignedVolunteerId: null,
-            reportedBy: userProfile.userId,
-        });
+        try {
+            const saved = await addIssue({
+                title: form.title,
+                description: form.description,
+                category: form.category,
+                urgency: form.urgency,
+                imageUrl: form.imageUrl,
+                lat: form.lat,
+                lng: form.lng,
+                locationAddress: geo.location.address,
+                assignedVolunteerId: null,
+                reportedBy: userProfile.userId,
+            });
+            if (!saved) return;
+        } catch {
+            return;
+        }
 
         alert("Issue reported successfully 🚀");
 
@@ -136,9 +78,6 @@ export function ReportIssue() {
             location: "",
             lat: 0,
             lng: 0,
-        });
-        await updateDoc(doc(db, "users", userProfile.userId), {
-            points: increment(10),
         });
     };
 
@@ -248,43 +187,22 @@ export function ReportIssue() {
                     className="w-full p-3 border rounded-lg mb-3 bg-gray-100"
                 />
 
-                <div className="h-64 rounded-xl overflow-hidden border">
-                    {position ? (
-                        <MapContainer
-                            ref={mapRef}
-                            center={position}
-                            zoom={13}
-                            style={{ height: "100%", width: "100%" }}
-                            preferCanvas={true}
-                        >
-                            <TileLayer
-                                attribution="&copy; OpenStreetMap contributors"
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                keepBuffer={2}
-                            />
-
-                            <LocationPicker setForm={setForm} />
-                            <RecenterMap position={position} />
-
-                            {/* New Issue Selection Marker */}
-                            {form.lat !== 0 && (
-                                <Marker position={[form.lat, form.lng]}>
-                                    <Popup>Reporting Location</Popup>
-                                </Marker>
-                            )}
-
-                            {/* User Location Marker */}
-                            <Marker position={position}>
-                                <Popup>You are here 📍</Popup>
-                            </Marker>
-                        </MapContainer>
-                    ) : (
-                        <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 text-gray-500">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                            <p className="text-sm">Detecting your location...</p>
-                        </div>
-                    )}
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => void geo.detectLocation()}
+                        disabled={geo.isDetecting}
+                        className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+                    >
+                        {geo.isDetecting ? "Detecting..." : "Detect my location"}
+                    </button>
+                    <p className="text-sm text-gray-500">Or click the map / drag the marker</p>
                 </div>
+                <LocationPickerMap
+                    position={geo.location}
+                    onChange={geo.setLocation}
+                    height={256}
+                />
 
                 <p className="text-sm text-gray-500 mt-2">
                     Click on map to select location

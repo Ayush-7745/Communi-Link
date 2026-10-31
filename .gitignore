@@ -1,25 +1,33 @@
+
 # Dependencies
 node_modules/
+backend/node_modules/
 .pnp
 .pnp.js
 
 # Build output
 dist/
 build/
+backend/dist/
+
+# Environment variables (NEVER push these)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Firebase service account credentials (NEVER push these)
+serviceAccountKey.json
+backend/serviceAccountKey.json
+firebase-adminsdk*.json
 
 # Firebase
 .firebase/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
-firebase-adminsdk*.json
-
-# Environment variables (NEVER push these)
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Vite
 *.local
@@ -44,7 +52,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Package manager locks (keep only one)
-# If using npm: keep package-lock.json, ignore others
+# Package manager locks
+# Keep package-lock.json if using npm
 yarn.lock
 pnpm-lock.yaml
+
+# SSH / certificate keys
+*.pem
+*.key
+
+# Temporary deploy files
+*.zip
+*.tar.gz
+error.txt

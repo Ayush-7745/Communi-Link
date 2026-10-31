@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { collection, query, where, onSnapshot, orderBy, startAt, endAt } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
 import { User, MapPin } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
-import { geohashQueryBounds } from 'geofire-common';
+import { api, pollEvery, resolveLocation } from '../../../services/api';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -22,83 +20,28 @@ export function LiveTracking() {
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
   const { userProfile, currentUserLocation } = useUser();
-  const ngoLocation = currentUserLocation || (userProfile?.location as any) || null;
+  const ngoLocation = currentUserLocation || resolveLocation(userProfile?.location) || null;
 
   const [volunteers, setVolunteers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!ngoLocation) return;
-
-    const radiusInM = 15 * 1000;
-    const bounds = geohashQueryBounds([ngoLocation.lat, ngoLocation.lng], radiusInM);
-
-    const unsubscribes: (() => void)[] = [];
-    const volunteersMap = new Map<string, any>();
-
-    for (const b of bounds) {
-      const q = query(
-        collection(db, "users"),
-        orderBy("geohash"),
-        startAt(b[0]),
-        endAt(b[1])
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const vols = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-
-          // Parse volunteer location
-          let volLat: number | null = null;
-          let volLng: number | null = null;
-          if (data.location && typeof data.location === 'object') {
-            if (typeof data.location.lat === 'number' && typeof data.location.lng === 'number') {
-              volLat = data.location.lat;
-              volLng = data.location.lng;
-            }
-          } else if (typeof data.location === 'string' && data.location.includes(',')) {
-            const parts = data.location.split(',').map((s: string) => parseFloat(s.trim()));
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-              volLat = parts[0];
-              volLng = parts[1];
-            }
-          }
-
-          return {
-            id: docSnap.id,
-            ...data,
-            volLat,
-            volLng,
-          };
-        });
-
-        const filteredVols = vols.filter(v => v !== null);
-
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'removed') {
-            volunteersMap.delete(change.doc.id);
-          } else {
-            const docData = change.doc.data();
-            if (docData.role === 'volunteer') {
-              const volObj = filteredVols.find(v => v.id === change.doc.id);
-              if (volObj) volunteersMap.set(change.doc.id, volObj);
-            }
-          }
-        });
-
-        // Filter by strict 15km radius
-        const nearbyVols = Array.from(volunteersMap.values()).filter(v => {
-          if (v.volLat !== null && v.volLng !== null) {
-            const dist = getDistance(ngoLocation.lat, ngoLocation.lng, v.volLat, v.volLng);
-            return dist <= 15;
-          }
-          return false;
-        });
-
-        setVolunteers(nearbyVols);
-      });
-      unsubscribes.push(unsubscribe);
+    if (!ngoLocation) {
+      setVolunteers([]);
+      return;
     }
-    return () => unsubscribes.forEach(u => u());
+
+    return pollEvery(
+      () => api.getDirectory('volunteer', ngoLocation),
+      (users) => setVolunteers(users.map((data) => {
+        const location = data.location as { lat?: number; lng?: number } | undefined;
+        return {
+          ...data,
+          id: data.userId,
+          volLat: typeof location?.lat === 'number' ? location.lat : null,
+          volLng: typeof location?.lng === 'number' ? location.lng : null,
+        };
+      }))
+    );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
   const activeTasks = issues.filter(i => i.status === 'assigned' || i.status === 'completed');

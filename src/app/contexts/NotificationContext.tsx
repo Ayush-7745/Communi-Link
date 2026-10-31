@@ -1,11 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { collection, onSnapshot, addDoc, Timestamp } from "firebase/firestore";
-import { db } from "../../config/firebase";
 import { useUser } from "./UserContext";
-import { deleteDoc, doc } from "firebase/firestore";
-
-
-
+import { api, pollEvery, ApiTimestamp } from "../../services/api";
 
 
 export interface Notification {
@@ -20,7 +15,7 @@ export interface Notification {
 
     issueId?: string;
 
-    createdAt: Timestamp;
+    createdAt: ApiTimestamp;
     read: boolean;
 }
 
@@ -37,44 +32,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const { userProfile } = useUser();
 
     useEffect(() => {
-        if (!userProfile?.userId) return;
-        console.log("Current user:", userProfile?.userId);
-
-        const unsubscribe = onSnapshot(collection(db, "notifications"), (snapshot) => {
-            const data = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            })) as Notification[];
-
-            console.log("All notifications:", data);
-
-            const userNotifications = data
-                .filter((n) => n.userId === userProfile.userId)
-                .sort((a, b) => {
-                    const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                    const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                    return timeB - timeA;
-                });
-
-            console.log("Filtered and sorted:", userNotifications);
-
-            setNotifications(userNotifications);
-        });
-
-        return () => unsubscribe();
+        if (!userProfile?.userId) {
+            setNotifications([]);
+            return;
+        }
+        return pollEvery(
+            api.getNotifications,
+            (data) => setNotifications(data as unknown as Notification[])
+        );
     }, [userProfile?.userId]);
 
     const addNotification = async (
         data: Omit<Notification, "id" | "createdAt" | "read">
     ) => {
-        await addDoc(collection(db, "notifications"), {
-            ...data,
-            createdAt: Timestamp.now(),
-            read: false,
-        });
+        await api.createNotification(data as unknown as Record<string, unknown>);
     };
     const deleteNotification = async (id: string) => {
-        await deleteDoc(doc(db, "notifications", id));
+        await api.deleteNotification(id);
     };
 
     return (

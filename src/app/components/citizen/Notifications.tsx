@@ -38,7 +38,7 @@ export function Notifications() {
           <h1 className="text-3xl text-gray-900 mb-2">Notifications</h1>
           <p className="text-gray-600">Stay updated with your issue progress</p>
         </div>
-        <button className="text-sm text-[#3B82F6] hover:underline">
+        <button className="text-sm text-[#0d9488] hover:underline">
           Mark all as read
         </button>
       </div>
@@ -51,7 +51,7 @@ export function Notifications() {
           return (
             <div
               key={notification.id}
-              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow ${!notification.read && 'border-l-4 border-l-[#3B82F6]'
+              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow ${!notification.read && 'border-l-4 border-l-[#0d9488]'
                 }`}
             >
               <div className="flex items-start gap-4">
@@ -67,7 +67,7 @@ export function Notifications() {
                     <h3 className="text-gray-900">{notification.title}</h3>
 
                     {!notification.read && (
-                      <span className="w-2 h-2 bg-[#3B82F6] rounded-full flex-shrink-0 mt-1.5" />
+                      <span className="w-2 h-2 bg-[#0d9488] rounded-full flex-shrink-0 mt-1.5" />
                     )}
                   </div>
 

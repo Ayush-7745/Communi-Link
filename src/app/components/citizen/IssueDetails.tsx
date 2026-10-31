@@ -4,8 +4,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Issue } from '../../../types/issue';
 import { useUser } from '../../contexts/UserContext';
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { api } from '../../../services/api';
+import { IssueImageGallery } from '../IssueImageGallery';
 
 interface IssueDetailsProps {
   issueId: string;
@@ -26,10 +26,9 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
     const fetchNames = async () => {
       if (issue?.assignedNgoId) {
         try {
-          const docRef = doc(db, 'users', issue.assignedNgoId);
-          const snap = await getDoc(docRef);
-          if (snap.exists() && snap.data().fullName) {
-            setNgoName(snap.data().fullName);
+          const profile = await api.getUser(issue.assignedNgoId);
+          if (profile.fullName) {
+            setNgoName(String(profile.fullName));
           } else {
             setNgoName('NGO (Name not found)');
           }
@@ -39,10 +38,9 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       }
       if (issue?.assignedVolunteerId) {
         try {
-          const docRef = doc(db, 'users', issue.assignedVolunteerId);
-          const snap = await getDoc(docRef);
-          if (snap.exists() && snap.data().fullName) {
-            setVolunteerName(snap.data().fullName);
+          const profile = await api.getUser(issue.assignedVolunteerId);
+          if (profile.fullName) {
+            setVolunteerName(String(profile.fullName));
           } else {
             setVolunteerName('Volunteer (Name not found)');
           }
@@ -60,7 +58,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Issue not found</p>
         <button
           onClick={onBack}
-          className="mt-4 text-[#3B82F6] hover:underline"
+          className="mt-4 text-[#0d9488] hover:underline"
         >
           Go Back
         </button>
@@ -73,7 +71,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
         <p className="text-red-500">Unauthorized access</p>
         <button
           onClick={onBack}
-          className="mt-4 text-[#3B82F6] hover:underline"
+          className="mt-4 text-[#0d9488] hover:underline"
         >
           Go Back
         </button>
@@ -187,16 +185,19 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
           <div className="flex-1">
             <h1 className={`text-2xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-3`}>{issue.title}</h1>
             <div className="flex flex-wrap items-center gap-3">
-              <span className={`px-3 py-1 rounded-full text-sm ${issue.status === 'completed' ? 'bg-yellow-100 text-yellow-700' :
-                issue.status === 'verified' ? 'bg-green-100 text-green-700' :
+              <span className={`px-3 py-1 rounded-full text-sm ${issue.status === 'completed' ? 'bg-orange-100 text-orange-700' :
+                issue.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
                   issue.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
+                    issue.status === 'pending' ? 'bg-amber-100 text-amber-800' :
+                      issue.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        'bg-slate-100 text-slate-700'
                 }`}>
+                {issue.status === 'verified' && <CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />}
                 {
-                  issue.status === 'pending' ? 'Pending' :
+                  issue.status === 'verified' ? 'Verified' :
+                    issue.status === 'pending' ? 'Pending' :
                     issue.status === 'assigned' ? 'In Progress' :
                       issue.status === 'completed' ? 'Pending Verification' :
-                        issue.status === 'verified' ? 'Completed' :
                           issue.status
                 }
               </span>
@@ -231,23 +232,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
         <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} leading-relaxed`}>{issue.description}</p>
       </div>
 
-      {/* Images */}
-      {(issue.proofImages || (issue.imageUrl ? [issue.imageUrl] : [])).length > 0 && (
-        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-6`}>
-          <h2 className={`text-lg ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Attached Images</h2>
-          <div className="flex flex-col gap-2">
-            {(issue.proofImages || (issue.imageUrl ? [issue.imageUrl] : [])).map((image, index) => (
-              <button
-                key={index}
-                onClick={() => window.open(image, '_blank')}
-                className="text-left text-blue-600 hover:underline"
-              >
-                Click here to view attached image {index + 1}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <IssueImageGallery issue={issue} />
 
       {/* Assigned To */}
       {(issue.assignedNgoId || issue.assignedVolunteerId) && (

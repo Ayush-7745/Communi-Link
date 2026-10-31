@@ -3,12 +3,15 @@ import { Upload, MapPin, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { api } from '../../../services/api';
+import { LocationPickerMap } from '../LocationPickerMap';
+import { useGeolocation } from '../../../hooks/useGeolocation';
 
 export function ReportIssue() {
   const { addIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const { userProfile } = useUser();
+  const geo = useGeolocation();
   const isDark = effectiveTheme === 'dark';
 
   const [formData, setFormData] = useState({
@@ -20,24 +23,32 @@ export function ReportIssue() {
     imageUrl: '',
   });
   const [showSuccess, setShowSuccess] = useState(false);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const categories = ['Food', 'Health', 'Infrastructure', 'Disaster', 'Others'];
   const urgencyLevels = ['Low', 'Medium', 'High'];
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const location = geo.location;
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const coords: [number, number] = [
-          pos.coords.latitude,
-          pos.coords.longitude
-        ];
-        setUserLocation(coords);
-        setLocation({ lat: coords[0], lng: coords[1] }); // also sync your existing state
-      },
-      (err) => console.log(err)
-    );
-  }, []);
+    if (!imageFile) {
+      setImagePreview(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [imageFile]);
+
+  useEffect(() => {
+    void geo.detectLocation();
+  }, [geo.detectLocation]);
+
+  useEffect(() => {
+    if (location) {
+      setFormData((previous) => ({ ...previous, location: location.address }));
+    }
+  }, [location?.lat, location?.lng, location?.address]);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -49,16 +60,29 @@ export function ReportIssue() {
     // Add issue to context
     if (!userProfile?.userId) return;
 
-    addIssue({
+    let imageBlob: string | undefined;
+    if (imageFile) {
+      try {
+        imageBlob = (await api.uploadImage(imageFile)).blobName;
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Unable to upload the issue image.');
+        return;
+      }
+    }
+
+    const saved = await addIssue({
       title: formData.title,
       description: formData.description,
       category: formData.category,
-      lat: location?.lat || 0,
-      lng: location?.lng || 0,
+      lat: location.lat,
+      lng: location.lng,
+      locationAddress: location.address,
       urgency: formData.urgency,
       imageUrl: formData.imageUrl,
+      imageBlob,
       reportedBy: userProfile.userId,
     });
+    if (!saved) return;
 
     setShowSuccess(true);
     setTimeout(() => {
@@ -71,28 +95,8 @@ export function ReportIssue() {
         urgency: 'Low',
         imageUrl: '',
       });
+      setImageFile(null);
     }, 3000);
-  };
-
-  const detectLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          setLocation({ lat, lng });
-
-          setFormData((prev) => ({
-            ...prev,
-            location: `${lat}, ${lng}`,
-          }));
-        },
-        () => {
-          alert('Unable to detect location. Please enter manually.');
-        }
-      );
-    }
   };
 
   const isFormValid = () => {
@@ -103,34 +107,6 @@ export function ReportIssue() {
       formData.location.trim() !== ''
     );
   };
-  function LocationPicker({ setLocation }: any) {
-    useMapEvents({
-      click(e: { latlng: { lat: number; lng: number } }) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
-
-        setLocation({ lat, lng });
-
-        // ✅ AUTO-FILL INPUT FIELD
-        setFormData((prev: any) => ({
-          ...prev,
-          location: `${lat}, ${lng}`,
-        }));
-      },
-    });
-    return null;
-  }
-  function AutoCenterMap({ userLocation }: { userLocation: [number, number] | null }) {
-    const map = useMapEvents({});
-
-    useEffect(() => {
-      if (userLocation) {
-        map.setView(userLocation, 15);
-      }
-    }, [userLocation, map]);
-
-    return null;
-  }
   if (showSuccess) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -146,7 +122,7 @@ export function ReportIssue() {
           </p>
           <button
             onClick={() => setShowSuccess(false)}
-            className="px-6 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors"
+            className="px-6 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors"
           >
             Report Another Issue
           </button>
@@ -167,34 +143,23 @@ export function ReportIssue() {
         <div className="mt-4">
           <h3 className="mb-2 font-semibold">Select Location on Map</h3>
 
-          <MapContainer
-            center={(userLocation ? userLocation : location ? [location.lat, location.lng] : [19.076, 72.877]) as [number, number]}
-            zoom={13}
-            style={{ height: '300px', width: '100%' }}
-          >
-            <TileLayer
-              attribution="&copy; OpenStreetMap contributors"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <AutoCenterMap userLocation={userLocation} />
-            <LocationPicker setLocation={setLocation} />
-
-            {location && (
-              <Marker position={[location.lat, location.lng]}>
-                <Popup>Selected Location</Popup>
-              </Marker>
-            )}
-
-            {userLocation && (
-              <Marker position={userLocation}>
-                <Popup>You are here 📍</Popup>
-              </Marker>
-            )}
-          </MapContainer>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void geo.detectLocation()}
+              disabled={geo.isDetecting}
+              className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-60"
+            >
+              <MapPin className="w-5 h-5" />
+              {geo.isDetecting ? 'Detecting…' : 'Auto-detect'}
+            </button>
+            <span className="text-sm text-gray-500">Or click the map / drag the marker</span>
+          </div>
+          <LocationPickerMap position={location} onChange={geo.setLocation} />
         </div>
         {location && (
           <p className="text-sm mt-2">
-            Selected: {location.lat}, {location.lng}
+            Selected: {location.address}
           </p>
         )}
         <div>
@@ -204,7 +169,7 @@ export function ReportIssue() {
             required
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all`}
+            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all`}
             placeholder="Brief description of the issue"
           />
         </div>
@@ -217,7 +182,7 @@ export function ReportIssue() {
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={5}
-            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all resize-none`}
+            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all resize-none`}
             placeholder="Provide detailed information about the issue"
           />
         </div>
@@ -229,7 +194,7 @@ export function ReportIssue() {
             required
             value={formData.category}
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all`}
+            className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all`}
           >
             <option value="">Select category</option>
             {categories.map((cat) => (
@@ -247,16 +212,17 @@ export function ReportIssue() {
               required
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
               placeholder="Enter location or use auto-detect"
             />
             <button
               type="button"
-              onClick={detectLocation}
+              onClick={() => void geo.detectLocation()}
+              disabled={geo.isDetecting}
               className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
             >
               <MapPin className="w-5 h-5" />
-              Auto-detect
+              {geo.isDetecting ? 'Detecting…' : 'Auto-detect'}
             </button>
           </div>
         </div>
@@ -275,8 +241,8 @@ export function ReportIssue() {
                     urgency: level as 'Low' | 'Medium' | 'High',
                   })
                 } className={`py-3 px-4 rounded-lg border transition-all ${formData.urgency === level
-                  ? 'border-[#3B82F6] bg-blue-50 text-[#3B82F6]'
-                  : 'border-gray-300 text-gray-700 hover:border-[#3B82F6]'
+                  ? 'border-[#0d9488] bg-blue-50 text-[#0d9488]'
+                  : 'border-gray-300 text-gray-700 hover:border-[#0d9488]'
                   }`}
               >
                 {level}
@@ -295,8 +261,32 @@ export function ReportIssue() {
               setFormData({ ...formData, imageUrl: e.target.value })
             }
             placeholder="Paste image link (optional)"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488]"
           />
+        </div>
+
+        <div>
+          <label htmlFor="issue-image" className="block text-sm text-gray-700 mb-2">Upload an image (optional, max 5 MB)</label>
+          <input
+            id="issue-image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                alert('Choose a JPG, PNG, or WebP image up to 5 MB.');
+                event.target.value = '';
+                setImageFile(null);
+                return;
+              }
+              setImageFile(file);
+            }}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488]"
+          />
+          {imagePreview && (
+            <img src={imagePreview} alt="Issue image preview" className="mt-3 max-h-56 rounded-lg object-contain" />
+          )}
         </div>
 
         {/* Submit Button */}
@@ -304,7 +294,7 @@ export function ReportIssue() {
           <button
             type="submit"
             disabled={!isFormValid()}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             <AlertTriangle className="w-5 h-5" />
             Report Issue

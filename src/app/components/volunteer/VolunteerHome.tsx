@@ -195,7 +195,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border`}>
         <div className={`p-6 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-3">
-            <Target className="w-6 h-6 text-[#3B82F6]" />
+            <Target className="w-6 h-6 text-[#0d9488]" />
             <h2 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Recommended for You</h2>
           </div>
           <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mt-1`}>Tasks matching your skills and location</p>
@@ -237,7 +237,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                   </div>
                   <button
                     onClick={() => handleAcceptTask(task.id!)}
-                    className="px-4 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors whitespace-nowrap text-sm"
+                    className="px-4 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors whitespace-nowrap text-sm"
                   >
                     Accept Task
                   </button>
@@ -258,7 +258,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
-              className="bg-[#3B82F6] h-3 rounded-full transition-all"
+              className="bg-[#0d9488] h-3 rounded-full transition-all"
               style={{ width: `${allMyTasks.length > 0 ? (completedTasks / allMyTasks.length) * 100 : 0}%` }}
             ></div>
           </div>
@@ -278,7 +278,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                     color: isDark ? '#F3F4F6' : '#111827',
                   }}
                 />
-                <Bar dataKey="tasks" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="tasks" fill="#0d9488" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -323,7 +323,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                   </div>
                   <button
                     onClick={() => onViewTask(task.id!)}
-                    className="text-sm text-[#3B82F6] hover:underline whitespace-nowrap"
+                    className="text-sm text-[#0d9488] hover:underline whitespace-nowrap"
                   >
                     View Details
                   </button>
@@ -337,7 +337,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
       {/* Floating Help Button */}
       <button
         onClick={() => setShowHelpModal(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-[#3B82F6] text-white rounded-full shadow-lg hover:bg-[#2563EB] transition-all hover:scale-110 flex items-center justify-center z-40"
+        className="fixed bottom-6 right-6 w-14 h-14 bg-[#0d9488] text-white rounded-full shadow-lg hover:bg-[#0f766e] transition-all hover:scale-110 flex items-center justify-center z-40"
       >
         <HelpCircle className="w-6 h-6" />
       </button>
@@ -439,7 +439,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                     <textarea
                       value={problemReport.description}
                       onChange={(e) => setProblemReport({ ...problemReport, description: e.target.value })}
-                      className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                      className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                       rows={5}
                       placeholder="Please describe the problem you're experiencing..."
                     />
@@ -455,7 +455,7 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                   </div>
                   <button
                     onClick={handleReportProblem}
-                    className="w-full px-6 py-3 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors"
+                    className="w-full px-6 py-3 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors"
                   >
                     Submit Report
                   </button>
@@ -475,14 +475,14 @@ export function VolunteerHome({ onViewTask }: VolunteerHomeProps) {
                 <div className="space-y-4">
                   <div className={`p-4 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50'}`}>
                     <h4 className={`mb-2 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Email Support</h4>
-                    <a href="mailto:support@communilink.org" className="text-[#3B82F6] hover:underline">
+                    <a href="mailto:support@communilink.org" className="text-[#0d9488] hover:underline">
                       support@communilink.org
                     </a>
                   </div>
                   <div className={`p-4 rounded-lg border ${isDark ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50'}`}>
                     <h4 className={`mb-2 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Live Chat</h4>
                     <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-3`}>Available Mon-Fri, 9 AM - 6 PM</p>
-                    <button className="px-4 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors">
+                    <button className="px-4 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors">
                       Start Chat
                     </button>
                   </div>

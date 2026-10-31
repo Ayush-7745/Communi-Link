@@ -36,11 +36,12 @@ export function DashboardHome({ onViewIssue }: { onViewIssue: (issueId: string) 
     .slice(0, 4);
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-gray-100 text-gray-700';
+      case 'pending': return 'bg-amber-100 text-amber-800';
+      case 'approved': return 'bg-green-100 text-green-700';
       case 'assigned':
       case 'completed':
         return 'bg-orange-100 text-orange-700';
-      case 'verified': return 'bg-green-100 text-green-700';
+      case 'verified': return 'bg-emerald-100 text-emerald-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -109,7 +110,8 @@ export function DashboardHome({ onViewIssue }: { onViewIssue: (issueId: string) 
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className={isDark ? 'text-gray-200' : 'text-gray-900'}>{issue.title}</h3>
                       <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(issue.status)}`}>
-                        {issue.status === 'completed' || issue.status === 'assigned' ? 'In Progress' : issue.status === 'verified' ? 'Completed' : issue.status}
+                        {issue.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
+                        {issue.status === 'completed' || issue.status === 'assigned' ? 'In Progress' : issue.status === 'verified' ? 'Verified' : issue.status}
                       </span>
                     </div>
                     <div className={`flex items-center gap-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -122,7 +124,7 @@ export function DashboardHome({ onViewIssue }: { onViewIssue: (issueId: string) 
                   </div>
                   <button
                     onClick={() => issue.id && onViewIssue(issue.id)}
-                    className="text-sm text-[#3B82F6] hover:underline whitespace-nowrap"
+                    className="text-sm text-[#0d9488] hover:underline whitespace-nowrap"
                   >
                     View Details
                   </button>

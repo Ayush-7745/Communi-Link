@@ -110,7 +110,7 @@ export function NGODashboard({ onLogout }: NGODashboardProps) {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                    ? 'bg-[#3B82F6] text-white'
+                    ? 'bg-[#0d9488] text-white'
                     : isDark
                       ? 'text-gray-300 hover:bg-gray-700'
                       : 'text-gray-700 hover:bg-gray-100'
@@ -182,11 +182,11 @@ export function NGODashboard({ onLogout }: NGODashboardProps) {
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : userProfile?.fullName ? (
-                  <div className="w-10 h-10 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-bold">
+                  <div className="w-10 h-10 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-bold">
                     {userProfile.fullName.charAt(0)}
                   </div>
                 ) : (
-                  <div className="w-10 h-10 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-bold">
+                  <div className="w-10 h-10 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-bold">
                     N
                   </div>
                 )}

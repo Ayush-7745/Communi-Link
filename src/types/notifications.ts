@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase/firestore";
-
 export interface Notification {
     id?: string;
 
@@ -12,5 +10,10 @@ export interface Notification {
     issueId?: string;
 
     read: boolean;
-    createdAt: Timestamp;
+    createdAt: {
+        seconds: number;
+        nanoseconds: number;
+        toDate: () => Date;
+        toMillis: () => number;
+    } | Date | string;
 }

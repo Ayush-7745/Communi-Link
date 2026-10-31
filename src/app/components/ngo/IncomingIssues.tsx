@@ -83,7 +83,7 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
         <button
           onClick={() => setFilter('all')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'all'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -94,7 +94,7 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
         <button
           onClick={() => setFilter('high')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'high'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -175,7 +175,7 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
                   <div className="flex flex-col gap-2 min-w-[140px]">
                     <button
                       onClick={() => onViewIssue(issue.id!)}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-[#3B82F6] text-[#3B82F6] rounded-lg hover:bg-blue-50 hover:shadow-md transition-all whitespace-nowrap font-medium"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-[#0d9488] text-[#0d9488] rounded-lg hover:bg-blue-50 hover:shadow-md transition-all whitespace-nowrap font-medium"
                     >
                       <Eye className="w-4 h-4" />
                       View

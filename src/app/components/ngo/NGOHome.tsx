@@ -2,11 +2,9 @@ import { AlertCircle, Clock, CheckCircle, Inbox, TrendingUp, AlertTriangle, User
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, startAt, endAt } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
 import { useUser } from '../../contexts/UserContext';
 import { MapView } from '../citizen/MapView';
-import { geohashQueryBounds } from 'geofire-common';
+import { api, pollEvery } from '../../../services/api';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -50,63 +48,26 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
   const ngoLocation = currentUserLocation || resolveLocation(userProfile?.location) || null;
 
   useEffect(() => {
-    if (!ngoLocation) return;
-
-    const radiusInM = 15 * 1000;
-    const bounds = geohashQueryBounds([ngoLocation.lat, ngoLocation.lng], radiusInM);
-
-    const unsubscribes: (() => void)[] = [];
-    const volunteersMap = new Map<string, any>();
-
-    for (const b of bounds) {
-      const q = query(
-        collection(db, "users"),
-        orderBy("geohash"),
-        startAt(b[0]),
-        endAt(b[1])
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'removed') {
-            volunteersMap.delete(change.doc.id);
-          } else {
-            const data = change.doc.data();
-            if (data.role === 'volunteer') {
-              let volLat: number | null = null;
-              let volLng: number | null = null;
-              if (data.location && typeof data.location === 'object') {
-                if (typeof data.location.lat === 'number' && typeof data.location.lng === 'number') {
-                  volLat = data.location.lat;
-                  volLng = data.location.lng;
-                }
-              } else if (typeof data.location === 'string' && data.location.includes(',')) {
-                const parts = data.location.split(',').map((s: string) => parseFloat(s.trim()));
-                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                  volLat = parts[0];
-                  volLng = parts[1];
-                }
-              }
-
-              volunteersMap.set(change.doc.id, {
-                id: change.doc.id,
-                name: data.fullName || data.name || 'Volunteer',
-                skills: data.skills && data.skills.length > 0 ? data.skills : ['Helper'],
-                availability: data.availability || 'Flexible',
-                rating: data.rating || 4.5,
-                tasksCompleted: data.tasksCompleted || 0,
-                volLat,
-                volLng,
-              });
-            }
-          }
-        });
-
-        setFetchedVolunteers(Array.from(volunteersMap.values()));
-      });
-      unsubscribes.push(unsubscribe);
+    if (!ngoLocation) {
+      setFetchedVolunteers([]);
+      return;
     }
-    return () => unsubscribes.forEach(u => u());
+
+    return pollEvery(
+      () => api.getDirectory('volunteer', ngoLocation),
+      (users) => setFetchedVolunteers(users.map((data) => {
+        const location = data.location as { lat?: number; lng?: number } | undefined;
+        return {
+          ...data,
+          id: data.userId,
+          name: data.fullName || data.name || 'Volunteer',
+          skills: data.skills || ['Helper'],
+          availability: data.availability || 'Flexible',
+          volLat: typeof location?.lat === 'number' ? location.lat : null,
+          volLng: typeof location?.lng === 'number' ? location.lng : null,
+        };
+      }))
+    );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
   const recommendedVolunteers = fetchedVolunteers.filter(v => {
@@ -138,12 +99,12 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending': return 'bg-gray-100 text-gray-700';
-      case 'approved': return 'bg-blue-100 text-blue-700';
+      case 'pending': return 'bg-amber-100 text-amber-800';
+      case 'approved': return 'bg-green-100 text-green-700';
       case 'assigned':
       case 'completed':
         return 'bg-orange-100 text-orange-700';
-      case 'verified': return 'bg-green-100 text-green-700';
+      case 'verified': return 'bg-emerald-100 text-emerald-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -236,7 +197,7 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
                     </div>
                     <button
                       onClick={() => issue.id && onViewIssue(issue.id)}
-                      className="px-3 py-1.5 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors text-xs whitespace-nowrap self-center"
+                      className="px-3 py-1.5 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors text-xs whitespace-nowrap self-center"
                     >
                       Review
                     </button>
@@ -263,7 +224,8 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{issue.title}</h3>
                       <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(issue.status)}`}>
-                        {issue.status === 'completed' || issue.status === 'assigned' ? 'In Progress' : issue.status === 'verified' ? 'Completed' : issue.status}
+                        {issue.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
+                        {issue.status === 'completed' || issue.status === 'assigned' ? 'In Progress' : issue.status === 'verified' ? 'Verified' : issue.status}
                       </span>
                     </div>
                     <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{issue.category} • {issue.createdAt?.toDate().toLocaleDateString()}</p>
@@ -279,7 +241,7 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border hover:shadow-md transition-shadow`}>
         <div className={`p-6 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#3B82F6]" />
+            <Users className="w-5 h-5 text-[#0d9488]" />
             <h2 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Recommended Volunteers</h2>
           </div>
           <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mt-1`}>Top volunteers based on skills and performance</p>
@@ -289,10 +251,10 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
             {recommendedVolunteers.map((volunteer) => (
               <div
                 key={volunteer.id}
-                className={`${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4 hover:border-[#3B82F6] hover:shadow-md transition-all`}
+                className={`${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4 hover:border-[#0d9488] hover:shadow-md transition-all`}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-semibold">
+                  <div className="w-12 h-12 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-semibold">
                     {volunteer.name.charAt(0)}
                   </div>
                   <div className="flex items-center gap-1 text-yellow-500">
@@ -317,7 +279,7 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
                     setSelectedVolunteer(volunteer);
                     setShowAssignModal(true);
                   }}
-                  className="w-full px-3 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors text-sm"
+                  className="w-full px-3 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors text-sm"
                 >
                   Quick Assign
                 </button>
@@ -343,17 +305,18 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
                     <span className={`text-xs px-2 py-1 rounded-full ${task.urgency === 'High' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{task.urgency}</span>
                   </div>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (task.id) {
-                        updateIssue(task.id, {
+                        const assigned = await updateIssue(task.id, {
                           status: 'assigned',
                           assignedVolunteerId: selectedVolunteer.id
                         });
+                        if (!assigned) return;
                         setShowAssignModal(false);
                         setSelectedVolunteer(null);
                       }
                     }}
-                    className="self-start text-xs bg-[#3B82F6] text-white px-3 py-1.5 rounded hover:bg-[#2563EB]"
+                    className="self-start text-xs bg-[#0d9488] text-white px-3 py-1.5 rounded hover:bg-[#0f766e]"
                   >
                     Assign Here
                   </button>

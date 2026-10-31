@@ -4,10 +4,8 @@ import { CheckCircle, Star, Award, TrendingUp, MapPin, Calendar, Clock, Users, F
 import { useIssues } from '../../contexts/IssuesContext';
 import { toast } from 'sonner';
 import { useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, startAt, endAt } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
 import { useUser } from '../../contexts/UserContext';
-import { geohashQueryBounds } from 'geofire-common';
+import { api, pollEvery, resolveLocation } from '../../../services/api';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -33,87 +31,43 @@ export function VolunteerManagement() {
   const [viewingVolunteer, setViewingVolunteer] = useState<any>(null);
 
   const { currentUserLocation } = useUser();
-  const ngoLocation = currentUserLocation || (userProfile?.location as any) || null;
+  const ngoLocation = currentUserLocation || resolveLocation(userProfile?.location) || null;
 
   const [fetchedVolunteers, setFetchedVolunteers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!ngoLocation) return;
-
-    const radiusInM = 15 * 1000;
-    const bounds = geohashQueryBounds([ngoLocation.lat, ngoLocation.lng], radiusInM);
-
-    const unsubscribes: (() => void)[] = [];
-    const volunteersMap = new Map<string, any>();
-
-    for (const b of bounds) {
-      const q = query(
-        collection(db, "users"),
-        orderBy("geohash"),
-        startAt(b[0]),
-        endAt(b[1])
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const vols = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-
-          // Parse volunteer location – can be stored as {lat,lng} object OR "lat,lng" string
-          let volLat: number | null = null;
-          let volLng: number | null = null;
-          if (data.location && typeof data.location === 'object') {
-            if (typeof data.location.lat === 'number' && typeof data.location.lng === 'number') {
-              volLat = data.location.lat;
-              volLng = data.location.lng;
-            }
-          } else if (typeof data.location === 'string' && data.location.includes(',')) {
-            const parts = data.location.split(',').map((s: string) => parseFloat(s.trim()));
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-              volLat = parts[0];
-              volLng = parts[1];
-            }
-          }
-
-          return {
-            id: docSnap.id,
-            name: data.fullName || data.name || 'Volunteer',
-            skills: data.skills && data.skills.length > 0 ? data.skills : ['Community Helper'],
-            availability: data.availability || 'Flexible',
-            verified: data.verified !== false,
-            online: data.online || false,
-            rating: data.rating || 4.5,
-            tasksCompleted: data.tasksCompleted || 0,
-            reliability: data.reliability || 90,
-            joinDate: data.createdAt?.seconds ? new Date(data.createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            location: typeof data.location === 'string'
-              ? data.location
-              : (data.location && typeof data.location.lat === 'number'
-                ? `${data.location.lat.toFixed(4)}, ${data.location.lng.toFixed(4)}`
-                : (data.city || 'Nearby Region')),
-            volLat,
-            volLng,
-          };
-        });
-
-        const filteredVols = vols.filter(v => v !== null);
-
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'removed') {
-            volunteersMap.delete(change.doc.id);
-          } else {
-            const docData = change.doc.data();
-            if (docData.role === 'volunteer') {
-              const volObj = filteredVols.find(v => v.id === change.doc.id);
-              if (volObj) volunteersMap.set(change.doc.id, volObj);
-            }
-          }
-        });
-
-        setFetchedVolunteers(Array.from(volunteersMap.values()));
-      });
-      unsubscribes.push(unsubscribe);
+    if (!ngoLocation) {
+      setFetchedVolunteers([]);
+      return;
     }
-    return () => unsubscribes.forEach(u => u());
+
+    return pollEvery(
+      () => api.getDirectory('volunteer', ngoLocation),
+      (users) => setFetchedVolunteers(users.map((data) => {
+        const location = data.location as { lat?: number; lng?: number } | undefined;
+        const createdAt = data.createdAt as { seconds?: number } | undefined;
+        return {
+          ...data,
+          id: data.userId,
+          name: data.fullName || data.name || 'Volunteer',
+          skills: data.skills && (data.skills as unknown[]).length > 0 ? data.skills : ['Community Helper'],
+          availability: data.availability || 'Flexible',
+          verified: data.verified !== false,
+          online: data.online || false,
+          rating: data.rating || 4.5,
+          tasksCompleted: data.tasksCompleted || 0,
+          reliability: data.reliability || 90,
+          joinDate: createdAt?.seconds ? new Date(createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          location: typeof data.location === 'string'
+            ? data.location
+            : (typeof location?.lat === 'number'
+              ? `${location.lat.toFixed(4)}, ${location.lng?.toFixed(4)}`
+              : (data.city || 'Nearby Region')),
+          volLat: location?.lat ?? null,
+          volLng: location?.lng ?? null,
+        };
+      }))
+    );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
   const volunteers = fetchedVolunteers.map(v => {
@@ -159,16 +113,17 @@ export function VolunteerManagement() {
     return 'bg-orange-100';
   };
 
-  const handleAssignTask = () => {
+  const handleAssignTask = async () => {
     if (!selectedTask) {
       toast.error('Please select a task');
       return;
     }
 
-    updateIssue(selectedTask, {
+    const assigned = await updateIssue(selectedTask, {
       status: 'assigned',
       assignedVolunteerId: selectedVolunteer.id,
     });
+    if (!assigned) return;
 
     toast.success(`Task successfully assigned to ${selectedVolunteer.name}! 🎉`);
     setShowAssignModal(false);
@@ -240,7 +195,7 @@ export function VolunteerManagement() {
         <button
           onClick={() => setFilter('all')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'all'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -251,7 +206,7 @@ export function VolunteerManagement() {
         <button
           onClick={() => setFilter('online')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'online'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -262,7 +217,7 @@ export function VolunteerManagement() {
         <button
           onClick={() => setFilter('offline')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'offline'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -273,7 +228,7 @@ export function VolunteerManagement() {
         <button
           onClick={() => setFilter('active')}
           className={`px-4 py-2 rounded-lg transition-colors ${filter === 'active'
-            ? 'bg-[#3B82F6] text-white'
+            ? 'bg-[#0d9488] text-white'
             : isDark
               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -294,7 +249,7 @@ export function VolunteerManagement() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-3">
                 <div className="relative">
-                  <div className="w-14 h-14 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-semibold text-xl">
+                  <div className="w-14 h-14 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-semibold text-xl">
                     {volunteer.name.charAt(0)}
                   </div>
                   {/* Online/Offline Indicator */}
@@ -399,12 +354,12 @@ export function VolunteerManagement() {
                   setViewingVolunteer(volunteer);
                   setShowProfileModal(true);
                 }}
-                className="flex-1 px-3 py-2 border-2 border-[#3B82F6] text-[#3B82F6] rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium"
+                className="flex-1 px-3 py-2 border-2 border-[#0d9488] text-[#0d9488] rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium"
               >
                 View Profile
               </button>
               <button
-                className="flex-1 px-3 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors text-sm font-medium"
+                className="flex-1 px-3 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors text-sm font-medium"
                 onClick={() => {
                   setSelectedVolunteer(volunteer);
                   setShowAssignModal(true);
@@ -436,7 +391,7 @@ export function VolunteerManagement() {
               <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
                 <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-3`}>Assigning to:</p>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                  <div className="w-12 h-12 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-semibold text-lg">
                     {selectedVolunteer.name.charAt(0)}
                   </div>
                   <div className="flex-1">
@@ -475,7 +430,7 @@ export function VolunteerManagement() {
                 <select
                   value={selectedTask}
                   onChange={(e) => setSelectedTask(e.target.value)}
-                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                 >
                   <option value="">-- Select a task --</option>
                   {availableTasks.map((issue) => (
@@ -531,7 +486,7 @@ export function VolunteerManagement() {
                 <textarea
                   value={assignmentNotes}
                   onChange={(e) => setAssignmentNotes(e.target.value)}
-                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                   rows={3}
                   placeholder="Add any special instructions for the volunteer..."
                 />
@@ -548,7 +503,7 @@ export function VolunteerManagement() {
                 <button
                   onClick={handleAssignTask}
                   disabled={!selectedTask}
-                  className={`flex-1 px-6 py-3 bg-[#3B82F6] text-white rounded-lg transition-colors ${selectedTask ? 'hover:bg-[#2563EB]' : 'opacity-50 cursor-not-allowed'
+                  className={`flex-1 px-6 py-3 bg-[#0d9488] text-white rounded-lg transition-colors ${selectedTask ? 'hover:bg-[#0f766e]' : 'opacity-50 cursor-not-allowed'
                     }`}
                 >
                   Confirm Assignment
@@ -575,7 +530,7 @@ export function VolunteerManagement() {
 
             <div className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-semibold text-2xl">
+                <div className="w-16 h-16 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-semibold text-2xl">
                   {viewingVolunteer.name.charAt(0)}
                 </div>
                 <div>

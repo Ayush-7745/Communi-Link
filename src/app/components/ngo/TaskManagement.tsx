@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { MapPin, User, CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-react';
-import { collection, query, where, onSnapshot, orderBy, startAt, endAt } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
 import { useUser } from '../../contexts/UserContext';
-import { geohashQueryBounds } from 'geofire-common';
+import { api, pollEvery } from '../../../services/api';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -52,93 +50,43 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
   const [fetchedVolunteers, setFetchedVolunteers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!ngoLocation) return;
-
-    const radiusInM = 15 * 1000;
-    const bounds = geohashQueryBounds([ngoLocation.lat, ngoLocation.lng], radiusInM);
-
-    const unsubscribes: (() => void)[] = [];
-    const volunteersMap = new Map<string, any>();
-
-    for (const b of bounds) {
-      const q = query(
-        collection(db, "users"),
-        orderBy("geohash"),
-        startAt(b[0]),
-        endAt(b[1])
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const vols = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-
-          let volLat: number | null = null;
-          let volLng: number | null = null;
-          if (data.location && typeof data.location === 'object') {
-            if (typeof data.location.lat === 'number' && typeof data.location.lng === 'number') {
-              volLat = data.location.lat;
-              volLng = data.location.lng;
-            }
-          } else if (typeof data.location === 'string' && data.location.includes(',')) {
-            const parts = data.location.split(',').map((s: string) => parseFloat(s.trim()));
-            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-              volLat = parts[0];
-              volLng = parts[1];
-            }
-          }
-
-          return {
-            id: docSnap.id,
-            ...data,
-            name: data.fullName || data.name || 'Volunteer',
-            skills: data.skills || ['Community Help'],
-            availability: data.availability || 'Flexible',
-            distance: data.location ? 'Nearby' : 'Unknown',
-            volLat,
-            volLng,
-          };
-        });
-
-        const filteredVols = vols.filter(v => v !== null);
-
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'removed') {
-            volunteersMap.delete(change.doc.id);
-          } else {
-            const docData = change.doc.data();
-            if (docData.role === 'volunteer') {
-              const volObj = filteredVols.find(v => v.id === change.doc.id);
-              if (volObj) volunteersMap.set(change.doc.id, volObj);
-            }
-          }
-        });
-
-        // Strict 15km filter
-        const nearbyVols = Array.from(volunteersMap.values()).filter(v => {
-          if (v.volLat !== null && v.volLng !== null) {
-            const dist = getDistance(ngoLocation.lat, ngoLocation.lng, v.volLat, v.volLng);
-            return dist <= 15;
-          }
-          return false;
-        });
-
-        setFetchedVolunteers(nearbyVols);
-      });
-      unsubscribes.push(unsubscribe);
+    if (!ngoLocation) {
+      setFetchedVolunteers([]);
+      return;
     }
-    return () => unsubscribes.forEach(u => u());
+
+    return pollEvery(
+      () => api.getDirectory('volunteer', ngoLocation),
+      (users) => setFetchedVolunteers(users.map((data) => {
+        const location = data.location as { lat?: number; lng?: number } | undefined;
+        const distance = location && typeof location.lat === 'number' && typeof location.lng === 'number'
+          ? getDistance(ngoLocation.lat, ngoLocation.lng, location.lat, location.lng)
+          : null;
+        return {
+          ...data,
+          id: data.userId,
+          name: data.fullName || data.name || 'Volunteer',
+          skills: data.skills || ['Community Help'],
+          availability: data.availability || 'Flexible',
+          distance: distance === null ? 'Unknown' : 'Nearby',
+          volLat: location?.lat ?? null,
+          volLng: location?.lng ?? null,
+        };
+      }))
+    );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
   const volunteers = fetchedVolunteers;
 
-  const handleAssignVolunteer = (taskId: string, volunteerId: string) => {
+  const handleAssignVolunteer = async (taskId: string, volunteerId: string) => {
     const volunteer = volunteers.find(v => v.id === volunteerId);
     if (volunteer) {
-      updateIssue(taskId, {
+      const assigned = await updateIssue(taskId, {
         status: 'assigned',
         assignedVolunteerId: volunteerId,
         assignedVolunteerName: volunteer.name,
       });
+      if (!assigned) return;
       setShowAssignModal(false);
       setSelectedTask(null);
     }
@@ -154,11 +102,11 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
   };
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-blue-100 text-blue-700';
+      case 'approved': return 'bg-green-100 text-green-700';
       case 'assigned':
       case 'completed':
         return 'bg-orange-100 text-orange-700';
-      case 'verified': return 'bg-green-100 text-green-700';
+      case 'verified': return 'bg-emerald-100 text-emerald-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -224,25 +172,25 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
       <div className="flex gap-3 flex-wrap">
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg ${filter === 'all' ? 'bg-[#3B82F6] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg ${filter === 'all' ? 'bg-[#0d9488] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
         >
           All Tasks
         </button>
         <button
           onClick={() => setFilter('unassigned')}
-          className={`px-4 py-2 rounded-lg ${filter === 'unassigned' ? 'bg-[#3B82F6] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg ${filter === 'unassigned' ? 'bg-[#0d9488] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
         >
           Not Assigned
         </button>
         <button
           onClick={() => setFilter('assigned')}
-          className={`px-4 py-2 rounded-lg ${filter === 'assigned' ? 'bg-[#3B82F6] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg ${filter === 'assigned' ? 'bg-[#0d9488] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
         >
           Assigned
         </button>
         <button
           onClick={() => setFilter('completed')}
-          className={`px-4 py-2 rounded-lg ${filter === 'completed' ? 'bg-[#3B82F6] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg ${filter === 'completed' ? 'bg-[#0d9488] text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-white border border-gray-300 text-gray-700'}`}
         >
           Completed
         </button>
@@ -279,7 +227,8 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                           {task.urgency}
                         </span>
                         <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(task.status === 'assigned' && !task.assignedVolunteerId ? 'approved' : task.status)}`}>
-                          {task.status === 'completed' || (task.status === 'assigned' && task.assignedVolunteerId) ? 'In Progress' : task.status === 'verified' ? 'Completed' : task.status === 'assigned' ? 'approved' : task.status}
+                          {task.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
+                          {task.status === 'completed' || (task.status === 'assigned' && task.assignedVolunteerId) ? 'In Progress' : task.status === 'verified' ? 'Verified' : task.status === 'assigned' ? 'approved' : task.status}
                         </span>
                       </div>
                     </div>
@@ -347,7 +296,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                           setSelectedTask(task.id!);
                           setShowAssignModal(true);
                         }}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] hover:shadow-md transition-all whitespace-nowrap font-medium"
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] hover:shadow-md transition-all whitespace-nowrap font-medium"
                       >
                         <User className="w-4 h-4" />
                         Assign Volunteer
@@ -375,7 +324,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                             setSelectedTask(task.id!);
                             setShowAssignModal(true);
                           }}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-[#3B82F6] text-[#3B82F6] rounded-lg hover:bg-blue-50 hover:shadow-md transition-all whitespace-nowrap font-medium"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-[#0d9488] text-[#0d9488] rounded-lg hover:bg-blue-50 hover:shadow-md transition-all whitespace-nowrap font-medium"
                         >
                           <User className="w-4 h-4" />
                           Reassign
@@ -413,7 +362,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                 return (
                   <div
                     key={volunteer.id}
-                    className={`${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4 hover:border-[#3B82F6] transition-colors cursor-pointer`}
+                    className={`${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4 hover:border-[#0d9488] transition-colors cursor-pointer`}
                     onClick={() => handleAssignVolunteer(selectedTask, volunteer.id)}
                   >
                     <div className="flex items-start justify-between">
@@ -437,7 +386,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                           })()} away</span>
                         </div>
                       </div>
-                      <button className="px-4 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors">
+                      <button className="px-4 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors">
                         Assign
                       </button>
                     </div>

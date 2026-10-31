@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(expectedRole) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == expectedRole;
+    }
+
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    function isVolunteer(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.role == 'volunteer';
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.role in ['citizen', 'volunteer', 'ngo'];
+
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+    match /issues/{issueId} {
+      allow read: if signedIn();
+
+      allow create: if hasRole('citizen')
+        && request.resource.data.reportedBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.assignedVolunteerId == null
+        && request.resource.data.assignedNgoId == null;
+
+      allow update: if signedIn() && (
+        (
+          hasRole('ngo')
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'approved'
+          && changedOnly(['status', 'assignedNgoId', 'assignedNgoName'])
+          && (!('assignedNgoId' in request.resource.data)
+            || request.resource.data.assignedNgoId == null
+            || request.resource.data.assignedNgoId == request.auth.uid)
+        )
+        || (
+          hasRole('ngo')
+          && resource.data.status == 'approved'
+          && request.resource.data.status == 'approved'
+          && resource.data.assignedNgoId == null
+          && request.resource.data.assignedNgoId == request.auth.uid
+          && changedOnly(['assignedNgoId', 'assignedNgoName'])
+        )
+        || (
+          hasRole('volunteer')
+          && resource.data.status == 'approved'
+          && request.resource.data.status == 'assigned'
+          && request.resource.data.assignedVolunteerId == request.auth.uid
+          && changedOnly(['status', 'assigned', 'assignedVolunteerId', 'assignedVolunteerName'])
+          && (!('assigned' in request.resource.data) || request.resource.data.assigned == true)
+        )
+        || (
+          hasRole('ngo')
+          && resource.data.status == 'approved'
+          && request.resource.data.status == 'assigned'
+          && resource.data.assignedNgoId == request.auth.uid
+          && request.resource.data.assignedVolunteerId is string
+          && isVolunteer(request.resource.data.assignedVolunteerId)
+          && changedOnly(['status', 'assigned', 'assignedVolunteerId', 'assignedVolunteerName'])
+          && (!('assigned' in request.resource.data) || request.resource.data.assigned == true)
+        )
+        || (
+          hasRole('volunteer')
+          && resource.data.status == 'assigned'
+          && resource.data.assignedVolunteerId == request.auth.uid
+          && request.resource.data.status == 'completed'
+          && changedOnly(['status', 'completedAt', 'proofImages', 'volunteerNotes'])
+        )
+        || (
+          hasRole('ngo')
+          && resource.data.status == 'completed'
+          && resource.data.assignedNgoId == request.auth.uid
+          && request.resource.data.status == 'verified'
+          && changedOnly(['status'])
+        )
+      );
+
+      allow delete: if false;
+    }
+  }
+}

@@ -3,8 +3,8 @@ import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { api } from '../../../services/api';
+import { IssueImageGallery } from '../IssueImageGallery';
 
 interface IssueDetailsNGOProps {
   issueId: string;
@@ -24,10 +24,9 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
     const fetchName = async () => {
       if (issue?.reportedBy) {
         try {
-          const docRef = doc(db, 'users', issue.reportedBy);
-          const snap = await getDoc(docRef);
-          if (snap.exists() && snap.data().fullName) {
-            setCitizenName(snap.data().fullName);
+          const profile = await api.getUser(issue.reportedBy);
+          if (profile.fullName) {
+            setCitizenName(String(profile.fullName));
           } else {
             setCitizenName('Citizen (Name not found)');
           }
@@ -43,18 +42,17 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
     return (
       <div className="text-center py-12">
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Issue not found</p>
-        <button onClick={onBack} className="mt-4 text-[#3B82F6] hover:underline">Go Back</button>
+        <button onClick={onBack} className="mt-4 text-[#0d9488] hover:underline">Go Back</button>
       </div>
     );
   }
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (!userProfile?.userId) return;
-    updateIssue(issueId, {
-      status: 'assigned',
-      assignedNgoId: userProfile.userId
+    const approved = await updateIssue(issueId, {
+      status: 'approved',
     });
-    onBack();
+    if (approved) onBack();
   };
 
   const handleReject = () => {
@@ -125,31 +123,6 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
           </div>
         </div>
 
-        {(() => {
-          const images = issue.proofImages && issue.proofImages.length > 0
-            ? issue.proofImages
-            : (issue.imageUrl ? [issue.imageUrl] : []);
-
-          if (images.length === 0) return null;
-
-          return (
-            <div className="mb-6">
-              <h3 className={`text-lg ${isDark ? 'text-gray-200' : 'text-gray-900'} mb-3`}>Attached Images</h3>
-              <div className="flex flex-col gap-2">
-                {images.map((img, idx) => (
-                  <button 
-                    key={idx}
-                    onClick={() => window.open(img, '_blank')}
-                    className="text-left text-blue-600 hover:underline font-medium"
-                  >
-                    Click here to view attached image {idx + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
         {issue.status === 'pending' && (
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <button
@@ -169,6 +142,7 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
           </div>
         )}
       </div>
+      <IssueImageGallery issue={issue} />
     </div>
   );
 }

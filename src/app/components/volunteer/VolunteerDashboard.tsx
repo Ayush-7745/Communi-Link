@@ -91,21 +91,21 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
   };
 
   return (
-    <div className={`flex h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`flex h-screen ${isDark ? 'bg-slate-50' : 'bg-gray-50'}`}>
       {/* Sidebar */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isDark ? 'bg-white border-slate-300' : 'bg-white border-gray-200'} border-r transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`flex items-center justify-between p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`flex items-center justify-between p-4 border-b ${isDark ? 'border-slate-300' : 'border-gray-200'}`}>
             <div className="flex items-center justify-center w-full">
               <img src={logo} alt="Communi-Link" className="h-16 w-auto object-contain rounded-lg" />
             </div>
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className={`md:hidden ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`md:hidden ${isDark ? 'text-slate-600 hover:text-gray-200' : 'text-slate-500 hover:text-gray-700'}`}
             >
               <X className="w-6 h-6" />
             </button>
@@ -124,9 +124,9 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
                     setIsSidebarOpen(false);
                   }}
                   className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                    ? 'bg-[#3B82F6] text-white'
+                    ? 'bg-[#0d9488] text-white'
                     : isDark
-                      ? 'text-gray-300 hover:bg-gray-700'
+                      ? 'text-slate-700 hover:bg-gray-700'
                       : 'text-gray-700 hover:bg-gray-100'
                     }`}
                 >
@@ -148,7 +148,7 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
           </nav>
 
           {/* Logout */}
-          <div className={`p-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`p-4 border-t ${isDark ? 'border-slate-300' : 'border-gray-200'}`}>
             <button
               onClick={() => setShowLogoutModal(true)}
               className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -171,21 +171,21 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navbar */}
-        <header className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
+        <header className={`${isDark ? 'bg-white border-slate-300' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className={`md:hidden ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`md:hidden ${isDark ? 'text-slate-600 hover:text-gray-200' : 'text-slate-500 hover:text-gray-700'}`}
               >
                 <Menu className="w-6 h-6" />
               </button>
               <div className={`hidden md:flex items-center gap-3 ${isDark ? 'bg-gray-700' : 'bg-gray-100'} rounded-lg px-4 py-2 w-96`}>
-                <Search className="w-5 h-5 text-gray-400" />
+                <Search className="w-5 h-5 text-slate-600" />
                 <input
                   type="text"
                   placeholder="Search tasks..."
-                  className={`bg-transparent outline-none w-full ${isDark ? 'text-gray-200 placeholder-gray-500' : 'text-gray-700 placeholder-gray-400'}`}
+                  className={`bg-transparent outline-none w-full ${isDark ? 'text-gray-200 placeholder-slate-400' : 'text-gray-700 placeholder-gray-400'}`}
                 />
               </div>
             </div>
@@ -193,7 +193,7 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setCurrentPage('notifications')}
-                className={`relative p-2 ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'} rounded-lg transition-colors`}
+                className={`relative p-2 ${isDark ? 'text-slate-600 hover:text-gray-200 hover:bg-gray-700' : 'text-slate-500 hover:text-gray-700 hover:bg-gray-100'} rounded-lg transition-colors`}
               >
                 <Bell className="w-6 h-6" />
                 {notificationsCount > 0 && (
@@ -208,11 +208,11 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : userProfile?.fullName ? (
-                  <div className="w-10 h-10 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-bold">
+                  <div className="w-10 h-10 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-bold">
                     {userProfile.fullName.charAt(0)}
                   </div>
                 ) : (
-                  <div className="w-10 h-10 bg-[#3B82F6] rounded-full flex items-center justify-center text-white font-bold">
+                  <div className="w-10 h-10 bg-[#0d9488] rounded-full flex items-center justify-center text-white font-bold">
                     V
                   </div>
                 )}
@@ -220,7 +220,7 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
                   <p className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                     {userProfile?.fullName || "Volunteer"}
                   </p>
-                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-slate-500'}`}>
                     {userProfile?.email || "volunteer@demo.com"}
                   </p>
                 </div>
@@ -230,7 +230,7 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
         </header>
 
         {/* Page Content */}
-        <main className={`flex-1 overflow-y-auto p-6 ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <main className={`flex-1 overflow-y-auto p-6 ${isDark ? 'bg-slate-50' : 'bg-gray-50'}`}>
           {currentPage === 'dashboard' && <VolunteerHome onViewTask={handleViewTaskDetails} />}
           {currentPage === 'available-tasks' && <AvailableTasks onViewTask={handleViewTaskDetails} />}
           {currentPage === 'my-tasks' && <MyTasks onViewTask={handleViewTaskDetails} />}
@@ -248,13 +248,13 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
       {/* Logout Confirmation Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-2xl p-6 max-w-md w-full`}>
+          <div className={`${isDark ? 'bg-white' : 'bg-white'} rounded-2xl p-6 max-w-md w-full`}>
             <h3 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Confirm Logout</h3>
-            <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} mb-6`}>Are you sure you want to logout?</p>
+            <p className={`${isDark ? 'text-slate-600' : 'text-gray-600'} mb-6`}>Are you sure you want to logout?</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLogoutModal(false)}
-                className={`flex-1 px-4 py-2 border ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} rounded-lg transition-colors`}
+                className={`flex-1 px-4 py-2 border ${isDark ? 'border-gray-600 text-slate-700 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'} rounded-lg transition-colors`}
               >
                 Cancel
               </button>

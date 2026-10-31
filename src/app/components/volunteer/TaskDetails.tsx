@@ -3,11 +3,9 @@ import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Timestamp } from "firebase/firestore";
 import { useUser } from "../../contexts/UserContext";
-import { doc, updateDoc, increment, getDoc } from "firebase/firestore";
-import { db } from "../../../config/firebase";
-import { useNotifications } from "../../contexts/NotificationContext";
+import { api } from "../../../services/api";
+import { IssueImageGallery } from '../IssueImageGallery';
 interface TaskDetailsProps {
   taskId: string;
   onBack: () => void;
@@ -21,11 +19,22 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
   const task = getIssue(taskId);
   const [showProofModal, setShowProofModal] = useState(false);
   const [proofImages, setProofImages] = useState<File[]>([]);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addNotification } = useNotifications();
   const [ngoName, setNgoName] = useState<string>('Loading...');
   const [ngoEmail, setNgoEmail] = useState<string>('Loading...');
+
+  useEffect(() => {
+    if (!proofImages[0]) {
+      setProofPreview(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(proofImages[0]);
+    setProofPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [proofImages]);
 
   useEffect(() => {
     const fetchName = async () => {
@@ -35,12 +44,11 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
       
       if (task?.assignedNgoId) {
         try {
-          const docRef = doc(db, 'users', task.assignedNgoId);
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            const name = snap.data().fullName || 'NGO';
+          const profile = await api.getUser(task.assignedNgoId);
+          if (profile) {
+            const name = String(profile.fullName || 'NGO');
             setNgoName(name);
-            setNgoEmail(snap.data().email || 'Email not found');
+            setNgoEmail(String(profile.email || 'Email not found'));
           } else if (!task.assignedNgoName) {
             setNgoName('NGO (Name not found)');
             setNgoEmail('Email not found');
@@ -83,15 +91,17 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-full font-medium">Pending</span>;
+        return <span className="px-3 py-1.5 bg-amber-100 text-amber-800 text-sm rounded-full font-medium">Pending</span>;
+      case 'approved':
+        return <span className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-full font-medium">Approved</span>;
       case 'assigned':
-        return <span className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded-full font-medium">In Progress</span>;
+        return <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-full font-medium">In Progress</span>;
       case 'completed':
-        return <span className="px-3 py-1.5 bg-yellow-100 text-yellow-700 text-sm rounded-full font-medium">Waiting for verification</span>;
+        return <span className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded-full font-medium">Waiting for verification</span>;
       case 'verified':
-        return <span className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-full font-medium">Completed</span>;
+        return <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-sm rounded-full font-medium"><CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />Verified</span>;
       default:
-        return <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-full font-medium">{status}</span>;
+        return <span className="px-3 py-1.5 bg-slate-100 text-slate-700 text-sm rounded-full font-medium">{status}</span>;
     }
   };
 
@@ -118,48 +128,41 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
     setShowProofModal(true);
   };
 
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
-
   const handleSubmitProof = async () => {
     if (proofImages.length === 0) {
       toast.error('Please upload at least one proof image');
       return;
     }
 
-    // Convert files to base64 for persistent storage in Firestore
-    const imageUrls = await Promise.all(proofImages.map(file => convertToBase64(file)));
+    try {
+      const { blobName } = await api.uploadImage(proofImages[0]);
+      const saved = await updateIssue(taskId, {
+        status: 'completed',
+        completionProofBlob: blobName,
+        volunteerNotes: completionNotes,
+      });
+      if (!saved) return;
+      if (!userProfile?.userId) return;
 
-    updateIssue(taskId, {
-      status: 'completed',
-      completedAt: Timestamp.now(),
-      proofImages: imageUrls,
-      volunteerNotes: completionNotes,
-    });
-    if (!userProfile?.userId) return;
-
-    await addNotification({
-      userId: userProfile.userId,
-      title: "Task Completed",
-      message: "You completed a task! Points will be awarded upon NGO verification.",
-      type: "task-completed",
-    });
-
-    toast.success('Task marked as completed! Great job! 🎉');
-    setShowProofModal(false);
-    setProofImages([]);
-    setCompletionNotes('');
+      toast.success('Task marked as completed! Great job! 🎉');
+      setShowProofModal(false);
+      setProofImages([]);
+      setCompletionNotes('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to upload completion proof.');
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setProofImages([...proofImages, ...files]);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      toast.error('Choose a JPG, PNG, or WebP image up to 5 MB.');
+      e.target.value = '';
+      setProofImages([]);
+      return;
+    }
+    setProofImages([file]);
   };
 
   const removeImage = (index: number) => {
@@ -194,47 +197,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
             <p className={`${isDark ? 'text-gray-300' : 'text-gray-700'} leading-relaxed`}>{task.description}</p>
           </div>
 
-          {/* Uploaded Images (from citizen) */}
-          {(task.proofImages || (task.imageUrl ? [task.imageUrl] : [])).length > 0 && (
-            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-6`}>
-              <h2 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Reported Images</h2>
-              <div className="flex flex-col gap-2">
-                {(task.proofImages || (task.imageUrl ? [task.imageUrl] : [])).map((img, index) => (
-                  <button 
-                    key={index}
-                    onClick={() => window.open(img, '_blank')}
-                    className="text-left text-blue-600 hover:underline font-medium"
-                  >
-                    Click here to view attached image {index + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Proof Images (if completed) */}
-          {task.status === 'completed' && task.proofImages && task.proofImages.length > 0 && (
-            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-6`}>
-              <h2 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Completion Proof</h2>
-              <div className="flex flex-col gap-2 mb-4">
-                {task.proofImages.map((img, index) => (
-                  <button 
-                    key={index}
-                    onClick={() => window.open(img, '_blank')}
-                    className="text-left text-blue-600 hover:underline font-medium"
-                  >
-                    Click here to view completion proof image {index + 1}
-                  </button>
-                ))}
-              </div>
-              {task.volunteerNotes && (
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-1`}>Completion Notes:</p>
-                  <p className={isDark ? 'text-gray-300' : 'text-gray-700'}>{task.volunteerNotes}</p>
-                </div>
-              )}
-            </div>
-          )}
+          <IssueImageGallery issue={task} />
 
           {/* Task Timeline */}
           <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-6`}>
@@ -301,8 +264,8 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
                 <div>
                   <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-1`}>Distance</p>
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#3B82F6]" />
-                    <p className="text-[#3B82F6] font-medium">{(task as any).distance} away</p>
+                    <MapPin className="w-4 h-4 text-[#0d9488]" />
+                    <p className="text-[#0d9488] font-medium">{(task as any).distance} away</p>
                   </div>
                 </div>
               )}
@@ -345,7 +308,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
                     <Mail className={`w-5 h-5 mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
                     <div>
                       <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-1`}>Email</p>
-                      <a href={`mailto:${ngoEmail}`} className="text-[#3B82F6] hover:underline">
+                      <a href={`mailto:${ngoEmail}`} className="text-[#0d9488] hover:underline">
                         {ngoEmail}
                       </a>
                     </div>
@@ -358,10 +321,10 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
           {/* Action Buttons */}
           {(task.status === 'approved' || (task.status === 'assigned' && !task.assignedVolunteerId)) && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (userProfile?.userId) {
-                  assignIssue(taskId, userProfile.userId);
-                  toast.success('Task accepted! You can now start working on it.');
+                  const accepted = await assignIssue(taskId, userProfile.userId);
+                  if (accepted) toast.success('Task accepted! You can now start working on it.');
                 }
               }}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg font-bold text-lg"
@@ -405,8 +368,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
-                  multiple
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -422,10 +384,10 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
 
                 {proofImages.length > 0 && (
                   <div className="grid grid-cols-3 gap-3 mt-4">
-                    {proofImages.map((file, index) => (
+                    {proofImages.map((_file, index) => (
                       <div key={index} className="relative group">
                         <img
-                          src={URL.createObjectURL(file)}
+                          src={proofPreview || ''}
                           alt={`Proof ${index + 1}`}
                           className="w-full h-24 object-cover rounded-lg"
                         />
@@ -448,7 +410,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
                 <textarea
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
-                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                   rows={4}
                   placeholder="Add any notes about the task completion..."
                 />
@@ -463,7 +425,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
                 </button>
                 <button
                   onClick={handleSubmitProof}
-                  className="flex-1 px-6 py-3 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors"
+                  className="flex-1 px-6 py-3 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors"
                 >
                   Submit Proof & Complete Task
                 </button>

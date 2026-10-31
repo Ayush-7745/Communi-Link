@@ -1,11 +1,11 @@
 import { MapPin, Calendar, Eye, AlertTriangle, Clock, CheckCircle, Upload, X } from 'lucide-react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { MapView } from '../citizen/MapView';
-import { Timestamp } from "firebase/firestore";
 import { useUser } from '../../contexts/UserContext';
+import { api } from '../../../services/api';
 interface MyTasksProps {
   onViewTask: (taskId: string) => void;
 }
@@ -18,8 +18,20 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
   const [showProofModal, setShowProofModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [proofImages, setProofImages] = useState<File[]>([]);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!proofImages[0]) {
+      setProofPreview(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(proofImages[0]);
+    setProofPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [proofImages]);
 
   const volunteerId = userProfile?.userId; // later from auth
 
@@ -47,14 +59,18 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'pending':
+        return <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">Pending</span>;
+      case 'approved':
+        return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">Approved</span>;
       case 'assigned':
-        return <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">In Progress</span>;
+        return <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">In Progress</span>;
       case 'completed':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Waiting for verification</span>;
+        return <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">Waiting for verification</span>;
       case 'verified':
-        return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">Completed</span>;
+        return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium"><CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />Verified</span>;
       default:
-        return <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">{status}</span>;
+        return <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full font-medium">{status}</span>;
     }
   };
 
@@ -82,15 +98,6 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
     setShowProofModal(true);
   };
 
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
-
   const handleSubmitProof = async () => {
     if (!selectedTask) return;
 
@@ -99,26 +106,35 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
       return;
     }
 
-    // Convert files to base64 for persistent storage in Firestore
-    const imageUrls = await Promise.all(proofImages.map(file => convertToBase64(file)));
+    try {
+      const { blobName } = await api.uploadImage(proofImages[0]);
+      const saved = await updateIssue(selectedTask, {
+        status: 'completed',
+        completionProofBlob: blobName,
+        volunteerNotes: completionNotes,
+      });
+      if (!saved) return;
 
-    updateIssue(selectedTask, {
-      status: 'completed',
-      completedAt: Timestamp.now(),
-      proofImages: imageUrls,
-      volunteerNotes: completionNotes,
-    });
-
-    toast.success('Task marked as completed! Great job! 🎉');
-    setShowProofModal(false);
-    setProofImages([]);
-    setCompletionNotes('');
-    setSelectedTask(null);
+      toast.success('Task marked as completed! Great job! 🎉');
+      setShowProofModal(false);
+      setProofImages([]);
+      setCompletionNotes('');
+      setSelectedTask(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to upload completion proof.');
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setProofImages([...proofImages, ...files]);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      toast.error('Choose a JPG, PNG, or WebP image up to 5 MB.');
+      e.target.value = '';
+      setProofImages([]);
+      return;
+    }
+    setProofImages([file]);
   };
 
   const removeImage = (index: number) => {
@@ -181,7 +197,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
 
                         {/* REMOVE THIS if not in Issue type */}
                         {/* {task.distance && (
-    <div className="flex items-center gap-1 text-[#3B82F6]">
+    <div className="flex items-center gap-1 text-[#0d9488]">
       <MapPin className="w-4 h-4" />
       <span>{task.distance} away</span>
     </div>
@@ -272,8 +288,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
-                  multiple
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -290,10 +305,10 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                 {/* Image Previews */}
                 {proofImages.length > 0 && (
                   <div className="grid grid-cols-3 gap-3 mt-4">
-                    {proofImages.map((file, index) => (
+                    {proofImages.map((_file, index) => (
                       <div key={index} className="relative group">
                         <img
-                          src={URL.createObjectURL(file)}
+                          src={proofPreview || ''}
                           alt={`Proof ${index + 1}`}
                           className="w-full h-24 object-cover rounded-lg"
                         />
@@ -317,7 +332,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                 <textarea
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
-                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent`}
+                  className={`w-full px-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
                   rows={4}
                   placeholder="Add any notes about the task completion..."
                 />
@@ -333,7 +348,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                 </button>
                 <button
                   onClick={handleSubmitProof}
-                  className="flex-1 px-6 py-3 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors"
+                  className="flex-1 px-6 py-3 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors"
                 >
                   Submit Proof & Complete Task
                 </button>

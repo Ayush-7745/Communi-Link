@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Mail, Lock, Phone, MapPin, Upload, Building2, FileText, Calendar, Globe, User, Briefcase, ArrowLeft } from 'lucide-react';
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../config/firebase";
+import { createUserWithEmailAndPassword, deleteUser, signOut } from "firebase/auth";
+import { auth } from "../../config/firebase";
+import { api } from "../../services/api";
+import { useUser, type UserProfile } from "../contexts/UserContext";
 
 interface SignupPageProps {
   onBackToLogin: () => void;
@@ -11,6 +12,7 @@ interface SignupPageProps {
 type UserType = 'volunteer' | 'ngo' | 'citizen';
 
 export function SignupPage({ onBackToLogin }: SignupPageProps) {
+  const { setUserProfile } = useUser();
   const initialRole = new URLSearchParams(window.location.search).get("role");
   const defaultRole: UserType = (initialRole === 'citizen' || initialRole === 'ngo' || initialRole === 'volunteer') ? initialRole : 'volunteer';
   const [userType, setUserType] = useState<UserType>(defaultRole);
@@ -127,14 +129,33 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      await setDoc(doc(db, "users", user.uid), {
-        userId: user.uid,
-        email: email,
-        role: userType,
-        points: 0,
-        profilePhoto: null,
-        ...profileData
-      });
+      try {
+        const savedProfile = await api.createProfile({
+          userId: user.uid,
+          email,
+          role: userType,
+          points: 0,
+          profilePhoto: null,
+          ...profileData
+        });
+        setUserProfile(savedProfile as unknown as UserProfile);
+      } catch (profileError) {
+        console.error("Signup profile creation failed:", profileError);
+        try {
+          await deleteUser(user);
+        } catch (cleanupError) {
+          console.error("Unable to remove Firebase user after profile creation failed:", cleanupError);
+          try {
+            await signOut(auth);
+          } catch (signOutError) {
+            console.error("Unable to sign out after profile creation failed:", signOutError);
+          }
+          alert("We could not save your profile, and the new Firebase account could not be removed automatically. Please contact support before trying again.");
+          return;
+        }
+        alert("We could not save your profile. The newly created account was removed; please try again.");
+        return;
+      }
 
       alert("Registration successful!");
       onBackToLogin();
@@ -145,13 +166,13 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 py-12 px-6 overflow-y-auto">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-slate-50 to-blue-50 py-12 px-4 sm:px-6 overflow-y-auto">
       <div className="w-full max-w-2xl mx-auto">
-        <div className="bg-gray-800 rounded-2xl shadow-2xl p-8">
+        <div className="auth-card rounded-2xl bg-white shadow-xl p-6 sm:p-8 ring-1 ring-slate-200">
           {/* Back Button */}
           <button
             onClick={onBackToLogin}
-            className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+            className="flex items-center gap-2 text-slate-600 hover:text-teal-700 mb-6 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Login
@@ -160,17 +181,17 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
           {/* Title */}
           <div className="text-center mb-8">
             <h1 className="text-3xl text-white mb-2">Create an Account</h1>
-            <p className="text-gray-400">Join as a Volunteer, NGO, or Citizen</p>
+            <p className="text-slate-600">Join as a Volunteer, NGO, or Citizen</p>
           </div>
 
           {/* User Type Toggle */}
-          <div className="grid grid-cols-3 gap-2 mb-8 bg-gray-900 p-1 rounded-lg">
+          <div className="grid grid-cols-3 gap-2 mb-8 bg-slate-50 p-1 rounded-lg">
             <button
               type="button"
               onClick={() => setUserType('volunteer')}
               className={`py-3 rounded-md transition-all text-sm ${userType === 'volunteer'
-                ? 'bg-[#3B82F6] text-white'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-[#0d9488] text-white'
+                : 'text-slate-600 hover:text-teal-700'
                 }`}
             >
               Volunteer
@@ -179,8 +200,8 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
               type="button"
               onClick={() => setUserType('ngo')}
               className={`py-3 rounded-md transition-all text-sm ${userType === 'ngo'
-                ? 'bg-[#3B82F6] text-white'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-[#0d9488] text-white'
+                : 'text-slate-600 hover:text-teal-700'
                 }`}
             >
               NGO
@@ -189,8 +210,8 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
               type="button"
               onClick={() => setUserType('citizen')}
               className={`py-3 rounded-md transition-all text-sm ${userType === 'citizen'
-                ? 'bg-[#3B82F6] text-white'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-[#0d9488] text-white'
+                : 'text-slate-600 hover:text-teal-700'
                 }`}
             >
               Citizen
@@ -204,75 +225,75 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                 <>
                   {/* Volunteer Form */}
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Full Name *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Full Name *</label>
                     <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Enter your full name"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Email Address *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Email Address *</label>
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="email"
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="your.email@example.com"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Phone Number *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Phone Number *</label>
                     <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="tel"
                         required
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="+91 9876543210"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.password}
                           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Confirm Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Confirm Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.confirmPassword}
                           onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
@@ -280,22 +301,22 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Location (City / Area) *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Location (City / Area) *</label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.location}
                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Mumbai, Maharashtra"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Skills (Select all that apply) *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Skills (Select all that apply) *</label>
                     <div className="grid grid-cols-2 gap-2">
                       {skillOptions.map((skill) => (
                         <button
@@ -303,8 +324,8 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                           type="button"
                           onClick={() => handleSkillToggle(skill)}
                           className={`py-2 px-4 rounded-lg border transition-all ${formData.skills.includes(skill)
-                            ? 'bg-[#3B82F6] border-[#3B82F6] text-white'
-                            : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-[#3B82F6]'
+                            ? 'bg-[#0d9488] border-[#0d9488] text-white'
+                            : 'bg-slate-50 border-slate-300 text-slate-600 hover:border-[#0d9488]'
                             }`}
                         >
                           {skill}
@@ -314,12 +335,12 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Availability *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Availability *</label>
                     <select
                       required
                       value={formData.availability}
                       onChange={(e) => setFormData({ ...formData, availability: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                     >
                       <option value="">Select availability</option>
                       {availabilityOptions.map((option) => (
@@ -329,15 +350,15 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">ID Proof Upload (Aadhar / Student ID / Govt ID) *</label>
+                    <label className="block text-sm text-slate-700 mb-2">ID Proof Upload (Aadhar / Student ID / Govt ID) *</label>
                     <div className="relative">
-                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="file"
                         required
                         accept="image/*,.pdf"
                         onChange={(e) => handleFileChange(e, 'idProof')}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#3B82F6] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0d9488] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       />
                     </div>
                     {formData.idProof && (
@@ -351,16 +372,16 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                       required
                       checked={formData.volunteerConfirm}
                       onChange={(e) => setFormData({ ...formData, volunteerConfirm: e.target.checked })}
-                      className="mt-1 w-4 h-4 accent-[#3B82F6]"
+                      className="mt-1 w-4 h-4 accent-[#0d9488]"
                     />
-                    <label className="text-sm text-gray-300">
+                    <label className="text-sm text-slate-700">
                       I confirm I am willing to volunteer for social causes *
                     </label>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] transition-colors"
+                    className="w-full bg-[#0d9488] text-white py-3 rounded-lg hover:bg-[#0f766e] transition-colors"
                   >
                     Register as Volunteer
                   </button>
@@ -369,60 +390,60 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                 <>
                   {/* Citizen Form */}
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Full Name *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Full Name *</label>
                     <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.citizenFullName}
                         onChange={(e) => setFormData({ ...formData, citizenFullName: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Enter your full name"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Email Address *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Email Address *</label>
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="email"
                         required
                         value={formData.citizenEmail}
                         onChange={(e) => setFormData({ ...formData, citizenEmail: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="your.email@example.com"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.citizenPassword}
                           onChange={(e) => setFormData({ ...formData, citizenPassword: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Confirm Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Confirm Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.citizenConfirmPassword}
                           onChange={(e) => setFormData({ ...formData, citizenConfirmPassword: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
@@ -430,30 +451,30 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Location (City / Area) *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Location (City / Area) *</label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.citizenLocation}
                         onChange={(e) => setFormData({ ...formData, citizenLocation: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Mumbai, Maharashtra"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Upload ID Proof (Aadhar / Student ID / Govt ID) *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Upload ID Proof (Aadhar / Student ID / Govt ID) *</label>
                     <div className="relative">
-                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="file"
                         required
                         accept="image/*,.pdf"
                         onChange={(e) => handleFileChange(e, 'citizenIdProof')}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#3B82F6] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0d9488] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       />
                     </div>
                     {formData.citizenIdProof && (
@@ -467,16 +488,16 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                       required
                       checked={formData.citizenConfirm}
                       onChange={(e) => setFormData({ ...formData, citizenConfirm: e.target.checked })}
-                      className="mt-1 w-4 h-4 accent-[#3B82F6]"
+                      className="mt-1 w-4 h-4 accent-[#0d9488]"
                     />
-                    <label className="text-sm text-gray-300">
+                    <label className="text-sm text-slate-700">
                       I confirm the information provided is accurate *
                     </label>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] transition-colors"
+                    className="w-full bg-[#0d9488] text-white py-3 rounded-lg hover:bg-[#0f766e] transition-colors"
                   >
                     Register as Citizen
                   </button>
@@ -485,27 +506,27 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                 <>
                   {/* NGO Form */}
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">NGO Name *</label>
+                    <label className="block text-sm text-slate-700 mb-2">NGO Name *</label>
                     <div className="relative">
-                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.ngoName}
                         onChange={(e) => setFormData({ ...formData, ngoName: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Organization name"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Organization Type *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Organization Type *</label>
                     <select
                       required
                       value={formData.orgType}
                       onChange={(e) => setFormData({ ...formData, orgType: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                     >
                       <option value="">Select organization type</option>
                       {orgTypeOptions.map((option) => (
@@ -515,30 +536,30 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Registration Number *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Registration Number *</label>
                     <div className="relative">
-                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={formData.registrationNumber}
                         onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="Registration number"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Upload Registration Certificate *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Upload Registration Certificate *</label>
                     <div className="relative">
-                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="file"
                         required
                         accept="image/*,.pdf"
                         onChange={(e) => handleFileChange(e, 'registrationCertificate')}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#3B82F6] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0d9488] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       />
                     </div>
                     {formData.registrationCertificate && (
@@ -547,45 +568,45 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Official Email Address *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Official Email Address *</label>
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="email"
                         required
                         value={formData.officialEmail}
                         onChange={(e) => setFormData({ ...formData, officialEmail: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="contact@yourorganization.org"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.password}
                           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Confirm Password *</label>
+                      <label className="block text-sm text-slate-700 mb-2">Confirm Password *</label>
                       <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                         <input
                           type="password"
                           required
                           value={formData.confirmPassword}
                           onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                          className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                           placeholder="••••••••"
                         />
                       </div>
@@ -593,39 +614,39 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Phone Number *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Phone Number *</label>
                     <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="tel"
                         required
                         value={formData.orgPhone}
                         onChange={(e) => setFormData({ ...formData, orgPhone: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="+91 9876543210"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Organization Address *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Organization Address *</label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-3 w-5 h-5 text-gray-500" />
+                      <MapPin className="absolute left-4 top-3 w-5 h-5 text-slate-500" />
                       <textarea
                         required
                         value={formData.orgAddress}
                         onChange={(e) => setFormData({ ...formData, orgAddress: e.target.value })}
                         rows={3}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all resize-none"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all resize-none"
                         placeholder="Full address with city, state, and pincode"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Year of Establishment *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Year of Establishment *</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="number"
                         required
@@ -633,19 +654,19 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                         max={new Date().getFullYear()}
                         value={formData.yearEstablished}
                         onChange={(e) => setFormData({ ...formData, yearEstablished: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="2020"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Area of Work *</label>
+                    <label className="block text-sm text-slate-700 mb-2">Area of Work *</label>
                     <select
                       required
                       value={formData.areaOfWork}
                       onChange={(e) => setFormData({ ...formData, areaOfWork: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                     >
                       <option value="">Select area of work</option>
                       {areaOfWorkOptions.map((option) => (
@@ -654,50 +675,50 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                     </select>
                   </div>
 
-                  <div className="border-t border-gray-700 pt-5 mt-5">
+                  <div className="border-t border-slate-300 pt-5 mt-5">
                     <h3 className="text-lg text-white mb-4">Contact Person Details</h3>
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm text-gray-300 mb-2">Incharge / Contact Person Name *</label>
+                        <label className="block text-sm text-slate-700 mb-2">Incharge / Contact Person Name *</label>
                         <div className="relative">
-                          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                           <input
                             type="text"
                             required
                             value={formData.inchargeName}
                             onChange={(e) => setFormData({ ...formData, inchargeName: e.target.value })}
-                            className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                             placeholder="Contact person name"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm text-gray-300 mb-2">Incharge Email *</label>
+                        <label className="block text-sm text-slate-700 mb-2">Incharge Email *</label>
                         <div className="relative">
-                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                           <input
                             type="email"
                             required
                             value={formData.inchargeEmail}
                             onChange={(e) => setFormData({ ...formData, inchargeEmail: e.target.value })}
-                            className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                             placeholder="person@yourorganization.org"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm text-gray-300 mb-2">Incharge Phone Number *</label>
+                        <label className="block text-sm text-slate-700 mb-2">Incharge Phone Number *</label>
                         <div className="relative">
-                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                           <input
                             type="tel"
                             required
                             value={formData.inchargePhone}
                             onChange={(e) => setFormData({ ...formData, inchargePhone: e.target.value })}
-                            className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                             placeholder="+91 9876543210"
                           />
                         </div>
@@ -706,14 +727,14 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Website URL (Optional)</label>
+                    <label className="block text-sm text-slate-700 mb-2">Website URL (Optional)</label>
                     <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                       <input
                         type="url"
                         value={formData.website}
                         onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                         placeholder="https://www.yourorganization.org"
                       />
                     </div>
@@ -725,16 +746,16 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
                       required
                       checked={formData.ngoConfirm}
                       onChange={(e) => setFormData({ ...formData, ngoConfirm: e.target.checked })}
-                      className="mt-1 w-4 h-4 accent-[#3B82F6]"
+                      className="mt-1 w-4 h-4 accent-[#0d9488]"
                     />
-                    <label className="text-sm text-gray-300">
+                    <label className="text-sm text-slate-700">
                       I confirm this organization is legally registered *
                     </label>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] transition-colors"
+                    className="w-full bg-[#0d9488] text-white py-3 rounded-lg hover:bg-[#0f766e] transition-colors"
                   >
                     Register as NGO
                   </button>
@@ -744,9 +765,9 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
           </form>
 
           {/* Login Link */}
-          <div className="mt-6 text-center text-sm text-gray-400">
+          <div className="mt-6 text-center text-sm text-slate-600">
             Already have an account?{' '}
-            <button onClick={onBackToLogin} className="text-[#3B82F6] hover:underline">
+            <button onClick={onBackToLogin} className="text-[#0d9488] hover:underline">
               Login here
             </button>
           </div>

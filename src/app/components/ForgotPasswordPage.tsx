@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Mail, Lock, User, ArrowLeft, CheckCircle, Phone, FileText, Upload, Building2 } from 'lucide-react';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../config/firebase';
 
 interface ForgotPasswordPageProps {
   onBackToLogin: () => void;
@@ -44,69 +46,43 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
     return emailRegex.test(email);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (recoveryType === 'volunteer') {
-      // Validate email
-      if (!validateEmail(formData.email)) {
-        setErrors({ ...errors, email: 'Please enter a valid email address' });
-        return;
-      }
-
-      // Validate password match
-      if (formData.newPassword !== formData.confirmPassword) {
-        setErrors({ ...errors, password: 'Passwords do not match' });
-        return;
-      }
-    } else {
-      // NGO validation
-      if (!validateEmail(formData.ngoEmail)) {
-        setErrors({ ...errors, email: 'Please enter a valid email address' });
-        return;
-      }
-
-      if (formData.ngoNewPassword !== formData.ngoConfirmPassword) {
-        setErrors({ ...errors, password: 'Passwords do not match' });
-        return;
-      }
+    const email = recoveryType === 'volunteer' ? formData.email : formData.ngoEmail;
+    if (!validateEmail(email)) {
+      setErrors({ ...errors, email: 'Please enter a valid email address' });
+      return;
     }
 
-    // Clear errors and show success
     setErrors({ email: '', password: '' });
-    setShowSuccess(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setShowSuccess(true);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      const message = code === 'auth/invalid-email'
+        ? 'Please enter a valid email address.'
+        : code === 'auth/too-many-requests'
+          ? 'Too many requests. Please wait a moment and try again.'
+          : 'Unable to send a password reset email. Please try again.';
+      setErrors({ email: message, password: '' });
+    }
   };
 
   const isFormValid = () => {
-    if (recoveryType === 'volunteer') {
-      return (
-        formData.username.trim() !== '' &&
-        formData.email.trim() !== '' &&
-        formData.newPassword.trim() !== '' &&
-        formData.confirmPassword.trim() !== ''
-      );
-    } else {
-      return (
-        formData.ngoName.trim() !== '' &&
-        formData.ngoEmail.trim() !== '' &&
-        formData.registrationNumber.trim() !== '' &&
-        formData.inchargeName.trim() !== '' &&
-        formData.inchargeEmail.trim() !== '' &&
-        formData.registrationCertificate !== null &&
-        formData.ngoNewPassword.trim() !== '' &&
-        formData.ngoConfirmPassword.trim() !== ''
-      );
-    }
+    const email = recoveryType === 'volunteer' ? formData.email : formData.ngoEmail;
+    return validateEmail(email);
   };
 
   if (showSuccess) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-6">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-slate-50 to-blue-50 flex items-center justify-center px-4 sm:px-6 py-8">
         <div className="w-full max-w-md">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl p-8">
+          <div className="auth-card rounded-2xl bg-white shadow-xl p-6 sm:p-8 ring-1 ring-slate-200">
             {/* Success Icon */}
             <div className="flex justify-center mb-6">
-              <div className="bg-green-500 p-4 rounded-full">
+              <div className="bg-green-700 p-4 rounded-full">
                 <CheckCircle className="w-12 h-12 text-white" />
               </div>
             </div>
@@ -114,7 +90,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
             {/* Success Message */}
             <div className="text-center mb-8">
               <h1 className="text-2xl text-white mb-3">Recovery Email Sent Successfully!</h1>
-              <p className="text-gray-400">
+              <p className="text-slate-600">
                 Please check your email to complete the password reset process
               </p>
             </div>
@@ -122,7 +98,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
             {/* Back to Login Button */}
             <button
               onClick={onBackToLogin}
-              className="w-full bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] transition-colors"
+              className="w-full bg-[#0d9488] text-white py-3 rounded-lg hover:bg-[#0f766e] transition-colors"
             >
               Back to Login
             </button>
@@ -133,13 +109,13 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-6">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-slate-50 to-blue-50 flex items-center justify-center px-4 sm:px-6 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-gray-800 rounded-2xl shadow-2xl p-8">
+        <div className="auth-card rounded-2xl bg-white shadow-xl p-6 sm:p-8 ring-1 ring-slate-200">
           {/* Back Button */}
           <button
             onClick={onBackToLogin}
-            className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+            className="flex items-center gap-2 text-slate-600 hover:text-teal-700 mb-6 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Login
@@ -150,7 +126,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
             <h1 className="text-3xl text-white mb-2">
               {recoveryType === 'volunteer' ? 'Forgot Password' : 'Recover NGO Account'}
             </h1>
-            <p className="text-gray-400">
+            <p className="text-slate-600">
               {recoveryType === 'volunteer'
                 ? 'Recover your account by entering your details'
                 : 'Verify your organization details to reset your password'}
@@ -158,14 +134,14 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
           </div>
 
           {/* Account Type Toggle */}
-          <div className="flex gap-2 mb-8 bg-gray-900 p-1 rounded-lg">
+          <div className="flex gap-2 mb-8 bg-slate-50 p-1 rounded-lg">
             <button
               type="button"
               onClick={() => setRecoveryType('volunteer')}
               className={`flex-1 py-3 rounded-md transition-all ${
                 recoveryType === 'volunteer'
-                  ? 'bg-[#3B82F6] text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-[#0d9488] text-white'
+                  : 'text-slate-600 hover:text-teal-700'
               }`}
             >
               Volunteer / Citizen
@@ -175,8 +151,8 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
               onClick={() => setRecoveryType('ngo')}
               className={`flex-1 py-3 rounded-md transition-all ${
                 recoveryType === 'ngo'
-                  ? 'bg-[#3B82F6] text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-[#0d9488] text-white'
+                  : 'text-slate-600 hover:text-teal-700'
               }`}
             >
               NGO
@@ -184,24 +160,24 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div key={recoveryType}>
             {recoveryType === 'volunteer' ? (
               <>
             {/* Username Input */}
             <div>
-              <label htmlFor="username" className="block text-sm text-gray-300 mb-2">
+              <label htmlFor="username" className="block text-sm text-slate-700 mb-2">
                 Username (or Full Name) *
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="text"
                   id="username"
                   required
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                   placeholder="Enter your username"
                 />
               </div>
@@ -209,11 +185,11 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
 
             {/* Email Input */}
             <div>
-              <label htmlFor="email" className="block text-sm text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-sm text-slate-700 mb-2">
                 Registered Email Address *
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="email"
                   id="email"
@@ -223,7 +199,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                     setFormData({ ...formData, email: e.target.value });
                     setErrors({ ...errors, email: '' });
                   }}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                   placeholder="your.email@example.com"
                 />
               </div>
@@ -234,11 +210,11 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
 
             {/* New Password Input */}
             <div>
-              <label htmlFor="newPassword" className="block text-sm text-gray-300 mb-2">
+              <label htmlFor="newPassword" className="block text-sm text-slate-700 mb-2">
                 New Password *
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="password"
                   id="newPassword"
@@ -248,7 +224,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                     setFormData({ ...formData, newPassword: e.target.value });
                     setErrors({ ...errors, password: '' });
                   }}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                   placeholder="Enter new password"
                 />
               </div>
@@ -256,11 +232,11 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
 
             {/* Confirm Password Input */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm text-gray-300 mb-2">
+              <label htmlFor="confirmPassword" className="block text-sm text-slate-700 mb-2">
                 Confirm New Password *
               </label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="password"
                   id="confirmPassword"
@@ -270,7 +246,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                     setFormData({ ...formData, confirmPassword: e.target.value });
                     setErrors({ ...errors, password: '' });
                   }}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                   placeholder="Confirm new password"
                 />
               </div>
@@ -284,29 +260,29 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
               <>
                 {/* NGO Form */}
                 <div>
-                  <label htmlFor="ngoName" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="ngoName" className="block text-sm text-slate-700 mb-2">
                     NGO Name *
                   </label>
                   <div className="relative">
-                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="text"
                       id="ngoName"
                       required
                       value={formData.ngoName}
                       onChange={(e) => setFormData({ ...formData, ngoName: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="Organization name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="ngoEmail" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="ngoEmail" className="block text-sm text-slate-700 mb-2">
                     Registered Email Address *
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="email"
                       id="ngoEmail"
@@ -316,7 +292,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                         setFormData({ ...formData, ngoEmail: e.target.value });
                         setErrors({ ...errors, email: '' });
                       }}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="contact@yourorganization.org"
                     />
                   </div>
@@ -326,71 +302,71 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="registrationNumber" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="registrationNumber" className="block text-sm text-slate-700 mb-2">
                     Registration Number *
                   </label>
                   <div className="relative">
-                    <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="text"
                       id="registrationNumber"
                       required
                       value={formData.registrationNumber}
                       onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="Registration number"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="inchargeName" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="inchargeName" className="block text-sm text-slate-700 mb-2">
                     Incharge / Contact Person Name *
                   </label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="text"
                       id="inchargeName"
                       required
                       value={formData.inchargeName}
                       onChange={(e) => setFormData({ ...formData, inchargeName: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="Contact person name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="inchargeEmail" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="inchargeEmail" className="block text-sm text-slate-700 mb-2">
                     Incharge Email Address *
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="email"
                       id="inchargeEmail"
                       required
                       value={formData.inchargeEmail}
                       onChange={(e) => setFormData({ ...formData, inchargeEmail: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="person@yourorganization.org"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm text-gray-300 mb-2">
+                  <label className="block text-sm text-slate-700 mb-2">
                     Upload Registration Certificate (for verification) *
                   </label>
                   <div className="relative">
-                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="file"
                       required
                       accept="image/*,.pdf"
                       onChange={handleFileChange}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#3B82F6] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0d9488] file:text-white file:cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                     />
                   </div>
                   {formData.registrationCertificate && (
@@ -399,11 +375,11 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                 </div>
 
                 <div>
-                  <label htmlFor="ngoNewPassword" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="ngoNewPassword" className="block text-sm text-slate-700 mb-2">
                     New Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="password"
                       id="ngoNewPassword"
@@ -413,18 +389,18 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                         setFormData({ ...formData, ngoNewPassword: e.target.value });
                         setErrors({ ...errors, password: '' });
                       }}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="Enter new password"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="ngoConfirmPassword" className="block text-sm text-gray-300 mb-2">
+                  <label htmlFor="ngoConfirmPassword" className="block text-sm text-slate-700 mb-2">
                     Confirm New Password *
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
                       type="password"
                       id="ngoConfirmPassword"
@@ -434,7 +410,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
                         setFormData({ ...formData, ngoConfirmPassword: e.target.value });
                         setErrors({ ...errors, password: '' });
                       }}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent transition-all"
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent transition-all"
                       placeholder="Confirm new password"
                     />
                   </div>
@@ -450,7 +426,7 @@ export function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
             <button
               type="submit"
               disabled={!isFormValid()}
-              className="w-full bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] transition-colors disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full bg-[#0d9488] text-white py-3 rounded-lg hover:bg-[#0f766e] transition-colors disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Send Recovery Email
             </button>

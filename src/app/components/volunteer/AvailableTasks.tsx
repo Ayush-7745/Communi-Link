@@ -3,8 +3,7 @@ import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useState, useEffect } from 'react';
 import { useUser } from '../../contexts/UserContext';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { api } from '../../../services/api';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -28,11 +27,8 @@ function NGOName({ id, initialName, isDark }: { id: string; initialName?: string
 
     const fetchName = async () => {
       try {
-        const docRef = doc(db, 'users', id);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setName(snap.data().fullName || 'NGO');
-        }
+        const profile = await api.getUser(id);
+        setName(String(profile.fullName || 'NGO'));
       } catch (error) {
         console.error("Error fetching NGO name:", error);
       }
@@ -40,7 +36,7 @@ function NGOName({ id, initialName, isDark }: { id: string; initialName?: string
     fetchName();
   }, [id, initialName]);
 
-  return <p>Verified by: <span className="font-medium text-[#3B82F6]">{name}</span></p>;
+  return <p>Verified by: <span className="font-medium text-[#0d9488]">{name}</span></p>;
 }
 
 interface AvailableTasksProps {
@@ -48,7 +44,7 @@ interface AvailableTasksProps {
 }
 
 export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
-  const { userProfile } = useUser();
+  const { userProfile, currentUserLocation, isDetectingLocation, detectCurrentLocation } = useUser();
   const { issues, assignIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
@@ -59,22 +55,9 @@ export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
     i.id && !rejectedTasks.includes(i.id)
   );
 
-  // Get volunteer's stored location for distance display (filtering already done in IssuesContext)
-  let volLocation: { lat: number; lng: number } | null = null;
-  if (userProfile?.location) {
-    if (typeof userProfile.location === 'object' && 'lat' in userProfile.location) {
-      volLocation = { lat: userProfile.location.lat, lng: (userProfile.location as any).lng };
-    } else if (typeof userProfile.location === 'string' && userProfile.location.includes(',')) {
-      const parts = userProfile.location.split(',').map((s: string) => parseFloat(s.trim()));
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        volLocation = { lat: parts[0], lng: parts[1] };
-      }
-    }
-  }
-
   const getTaskDistance = (taskLat?: number, taskLng?: number): number | null => {
-    if (!volLocation || !taskLat || !taskLng) return null;
-    return getDistance(volLocation.lat, volLocation.lng, taskLat, taskLng);
+    if (!currentUserLocation || taskLat == null || taskLng == null) return null;
+    return getDistance(currentUserLocation.lat, currentUserLocation.lng, taskLat, taskLng);
   };
   const handleAcceptTask = (taskId: string) => {
     if (!userProfile?.userId) return;
@@ -127,6 +110,14 @@ export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
       <div>
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Available Tasks</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Discover and accept tasks to help your community</p>
+        <button
+          type="button"
+          onClick={() => void detectCurrentLocation()}
+          disabled={isDetectingLocation}
+          className="mt-3 rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+        >
+          {isDetectingLocation ? 'Detecting location…' : 'Update my location'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -205,7 +196,7 @@ export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
 
                   {/* Reporter & NGO Info */}
                   <div className={`mt-2 space-y-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                    <p>Reported by: <span className="font-medium text-[#3B82F6]">{task.reportedByName || 'Anonymous Citizen'}</span></p>
+                    <p>Reported by: <span className="font-medium text-[#0d9488]">{task.reportedByName || 'Anonymous Citizen'}</span></p>
                     {task.assignedNgoId && (
                       <NGOName id={task.assignedNgoId} initialName={task.assignedNgoName} isDark={isDark} />
                     )}
@@ -223,7 +214,7 @@ export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
                   </button>
                   <button
                     onClick={() => handleAcceptTask(task.id!)}
-                    className="px-4 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors whitespace-nowrap"
+                    className="px-4 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors whitespace-nowrap"
                   >
                     Accept Task
                   </button>

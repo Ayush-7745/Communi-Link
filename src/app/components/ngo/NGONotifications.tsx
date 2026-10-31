@@ -3,8 +3,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Bell, AlertCircle, CheckCircle, Users, Clock, Trash2, Check, Filter, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useIssues } from '../../contexts/IssuesContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+import { api } from '../../../services/api';
 
 interface NGONotificationsProps {
   onViewIssue?: (issueId: string) => void;
@@ -20,15 +19,17 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
 
   const markAsRead = async (id: string) => {
     try {
-      await updateDoc(doc(db, "notifications", id), { read: true });
-    } catch (e) { console.error(e) }
+      await api.markNotificationRead(id);
+    } catch (error) { console.error('Unable to mark notification as read:', error); }
   };
 
   const markAllAsRead = async () => {
     for (const notif of notifications.filter(n => !n.read)) {
       try {
-        await updateDoc(doc(db, "notifications", notif.id), { read: true });
-      } catch (e) { }
+        await api.markNotificationRead(notif.id);
+      } catch (error) {
+        console.error('Unable to mark notification as read:', error);
+      }
     }
   };
 
@@ -105,7 +106,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
-            className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors text-sm font-medium"
           >
             <Check className="w-4 h-4" />
             Mark All Read
@@ -120,7 +121,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-lg transition-colors ${filter === 'all'
-              ? 'bg-[#3B82F6] text-white'
+              ? 'bg-[#0d9488] text-white'
               : isDark
                 ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -131,7 +132,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
           <button
             onClick={() => setFilter('unread')}
             className={`px-4 py-2 rounded-lg transition-colors ${filter === 'unread'
-              ? 'bg-[#3B82F6] text-white'
+              ? 'bg-[#0d9488] text-white'
               : isDark
                 ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -195,14 +196,14 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
                     {!notification.read && (
                       <button
                         onClick={() => markAsRead(notification.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#3B82F6] hover:bg-blue-100 rounded-lg transition-colors"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#0d9488] hover:bg-blue-100 rounded-lg transition-colors"
                       >
                         <Check className="w-3 h-3" />
                         Mark as Read
                       </button>
                     )}
                     {notification.issueId && onViewIssue && (
-                      <button onClick={() => onViewIssue(notification.issueId!)} className="px-3 py-1.5 text-xs font-medium bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors">
+                      <button onClick={() => onViewIssue(notification.issueId!)} className="px-3 py-1.5 text-xs font-medium bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors">
                         View Details
                       </button>
                     )}
