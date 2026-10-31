@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "communi-link-2",
     "public": "dist",
     "ignore": [
       "firebase.json",

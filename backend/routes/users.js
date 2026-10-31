@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import User from '../models/User.js';
 import { requireAdminClaim, requireRole } from '../middleware/auth.js';
+import { sendClientError } from '../utils/httpResponse.js';
 
 const router = Router();
 const allowedProfileFields = [
@@ -37,17 +38,35 @@ function coordinates(location) {
 router.post('/', async (req, res, next) => {
   try {
     if (req.body.userId && req.body.userId !== req.uid) {
-      return res.status(403).json({ error: 'Profile userId must match the authenticated user.' });
+      return sendClientError(req, res, 403, 'Profile userId must match the authenticated user.', 'user_id_mismatch');
     }
     const { role, email } = req.body;
     if (!['citizen', 'volunteer', 'ngo'].includes(role) || typeof email !== 'string' || !email) {
-      return res.status(400).json({ error: 'A valid email and role are required.' });
+      return sendClientError(req, res, 400, 'A valid email and role are required.', 'invalid_email_or_role');
     }
     if (email.toLowerCase() !== String(req.tokenClaims.email || '').toLowerCase()) {
-      return res.status(403).json({ error: 'Profile email must match the authenticated Firebase account.' });
+      return sendClientError(
+        req,
+        res,
+        403,
+        'Profile email must match the authenticated Firebase account.',
+        'email_mismatch'
+      );
     }
     if (req.body.location != null && !coordinates(req.body.location)) {
-      return res.status(400).json({ error: 'Location must contain valid latitude and longitude coordinates.' });
+      return sendClientError(
+        req,
+        res,
+        400,
+        'Location must contain valid latitude and longitude coordinates.',
+        'invalid_location_coordinates'
+      );
+    }
+    if (await User.exists({ userId: req.uid })) {
+      return res.status(409).json({
+        error: 'A profile already exists; the role cannot be changed.',
+        reason: 'profile_already_exists',
+      });
     }
 
     const profile = await User.create({
@@ -60,22 +79,43 @@ router.post('/', async (req, res, next) => {
     });
     res.status(201).json(profile);
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ error: 'A profile already exists; the role cannot be changed.' });
+    if (error.code === 11000) {
+      return res.status(409).json({
+        error: 'A profile already exists; the role cannot be changed.',
+        reason: 'profile_already_exists',
+      });
+    }
     next(error);
   }
 });
 
-router.get('/me', requireRole('citizen', 'volunteer', 'ngo'), (req, res) => res.json(req.profile));
+router.get('/me', async (req, res, next) => {
+  try {
+    const profile = await User.findOne({ userId: req.uid }).lean();
+    if (!profile) return res.status(404).json({ error: 'profile_not_found' });
+    res.json(profile);
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.patch('/me', requireRole('citizen', 'volunteer', 'ngo'), async (req, res, next) => {
   try {
     if (req.body.location != null && !coordinates(req.body.location)) {
-      return res.status(400).json({ error: 'Location must contain valid latitude and longitude coordinates.' });
+      return sendClientError(
+        req,
+        res,
+        400,
+        'Location must contain valid latitude and longitude coordinates.',
+        'invalid_location_coordinates'
+      );
     }
     const updates = Object.fromEntries(
       allowedProfileFields.filter((key) => key in req.body).map((key) => [key, req.body[key]])
     );
-    if (!Object.keys(updates).length) return res.status(400).json({ error: 'No editable profile fields supplied.' });
+    if (!Object.keys(updates).length) {
+      return sendClientError(req, res, 400, 'No editable profile fields supplied.', 'no_editable_profile_fields');
+    }
     const profile = await User.findOneAndUpdate(
       { userId: req.uid },
       { $set: updates },
@@ -90,7 +130,9 @@ router.patch('/me', requireRole('citizen', 'volunteer', 'ngo'), async (req, res,
 router.get('/directory', requireRole('ngo'), async (req, res, next) => {
   try {
     const role = req.query.role;
-    if (!['volunteer', 'ngo'].includes(role)) return res.status(400).json({ error: 'A valid directory role is required.' });
+    if (!['volunteer', 'ngo'].includes(role)) {
+      return sendClientError(req, res, 400, 'A valid directory role is required.', 'invalid_directory_role');
+    }
     const users = await User.find({ role })
       .select('userId role fullName name email phone profilePhoto location geohash skills availability createdAt online verified rating tasksCompleted reliability city')
       .lean();

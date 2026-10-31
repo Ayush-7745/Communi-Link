@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import Issue from '../models/Issue.js';
 import User from '../models/User.js';
 import { createReadSasUrl, getBlobStorage, isValidBlobName } from '../services/blobStorage.js';
+import { sendClientError } from '../utils/httpResponse.js';
 
 const router = Router();
 const maxImageSize = 5 * 1024 * 1024;
@@ -42,14 +43,19 @@ function detectImage(buffer) {
   return null;
 }
 
-function sendUploadError(res, error) {
+function sendUploadError(req, res, error) {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: 'Image must be 5 MB or smaller.' });
     }
-    return res.status(400).json({ error: 'Upload exactly one image file.' });
+    return sendClientError(req, res, 400, 'Upload exactly one image file.', 'invalid_upload_fields');
   }
-  if (error.status) return res.status(error.status).json({ error: error.message });
+  if (error.status) {
+    if (error.status === 400) {
+      return sendClientError(req, res, 400, error.message, 'invalid_upload');
+    }
+    return res.status(error.status).json({ error: error.message });
+  }
   if (error.code === 'AZURE_STORAGE_NOT_CONFIGURED' || error.code === 'AZURE_STORAGE_CONFIGURATION_INVALID') {
     return res.status(503).json({ error: 'Image storage is not configured correctly on the server.' });
   }
@@ -59,12 +65,14 @@ function sendUploadError(res, error) {
 router.post('/', (req, res) => {
   upload.single('image')(req, res, async (uploadError) => {
     if (uploadError) {
-      sendUploadError(res, uploadError);
+      sendUploadError(req, res, uploadError);
       return;
     }
 
     try {
-      if (!req.file) return res.status(400).json({ error: 'An image file is required.' });
+      if (!req.file) {
+        return sendClientError(req, res, 400, 'An image file is required.', 'image_file_missing');
+      }
       const imageType = detectImage(req.file.buffer);
       if (!imageType || req.file.mimetype !== imageType.contentType) {
         return res.status(415).json({ error: 'The file must be a valid JPG, PNG, or WebP image.' });
@@ -79,7 +87,7 @@ router.post('/', (req, res) => {
 
       res.status(201).json({ blobName });
     } catch (error) {
-      sendUploadError(res, error);
+      sendUploadError(req, res, error);
     }
   });
 });
@@ -87,7 +95,9 @@ router.post('/', (req, res) => {
 router.get('/:blobName/url', async (req, res) => {
   try {
     const { blobName } = req.params;
-    if (!isValidBlobName(blobName)) return res.status(400).json({ error: 'Invalid image reference.' });
+    if (!isValidBlobName(blobName)) {
+      return sendClientError(req, res, 400, 'Invalid image reference.', 'invalid_blob_name');
+    }
 
     const [issue, profile] = await Promise.all([
       Issue.findOne({ $or: [{ imageBlob: blobName }, { completionProofBlob: blobName }] }).lean(),
@@ -100,12 +110,12 @@ router.get('/:blobName/url', async (req, res) => {
       || issue.assignedNgoId === req.uid
       || profile.role === 'ngo'
       || (profile.role === 'volunteer' && ['approved', 'assigned', 'completed', 'verified'].includes(issue.status));
-    if (!canRead) return res.status(403).json({ error: 'You cannot view this image.' });
+    if (!canRead) return sendClientError(req, res, 403, 'You cannot view this image.', 'image_access_denied');
 
     const url = await createReadSasUrl(blobName);
     res.json({ url, expiresInSeconds: 900 });
   } catch (error) {
-    sendUploadError(res, error);
+    sendUploadError(req, res, error);
   }
 });
 

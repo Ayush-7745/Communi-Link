@@ -12,6 +12,7 @@ import issuesRouter from './routes/issues.js';
 import notificationsRouter from './routes/notifications.js';
 import analyticsRouter from './routes/analytics.js';
 import uploadsRouter from './routes/uploads.js';
+import { sendClientError } from './utils/httpResponse.js';
 
 function redactSensitiveValue(value) {
   return String(value)
@@ -82,15 +83,30 @@ console.log(`firebase-admin project_id: ${adminProjectId}`);
 
 const app = express();
 const port = Number(process.env.PORT) || 5000;
-const allowedOrigins = (process.env.ALLOWED_ORIGINS
-  || 'http://localhost:5173,http://localhost:5174')
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+const configuredOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/^["']+|["']+$/g, '').replace(/\/+$/, ''))
   .filter(Boolean);
+const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
 
-app.use(cors({
-  origin: allowedOrigins,
-}));
+    console.warn(`CORS rejected origin "${origin}". Allowed origins: ${allowedOrigins.join(', ')}`);
+    callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+};
+
+console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '12mb' }));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' });
@@ -102,18 +118,27 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/uploads', uploadsRouter);
 
-app.use((error, _req, res, _next) => {
+app.use((error, req, res, _next) => {
   if (error.name === 'MulterError') {
     if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Image must be 5 MB or smaller.' });
-    return res.status(400).json({ error: 'Upload exactly one image file.' });
+    return sendClientError(req, res, 400, 'Upload exactly one image file.', 'invalid_upload_fields');
   }
   if (error.code === 'AZURE_STORAGE_NOT_CONFIGURED' || error.code === 'AZURE_STORAGE_CONFIGURATION_INVALID') {
     return res.status(503).json({ error: 'Image storage is not configured correctly on the server.' });
   }
-  if (error.code === 'INVALID_BLOB_NAME') return res.status(400).json({ error: 'Invalid image reference.' });
+  if (error.code === 'INVALID_BLOB_NAME') {
+    return sendClientError(req, res, 400, 'Invalid image reference.', 'invalid_blob_name');
+  }
   console.error('API request failed:', error);
-  if (error.name === 'ValidationError') return res.status(400).json({ error: error.message });
-  if (error.name === 'CastError') return res.status(400).json({ error: 'Invalid document ID.' });
+  if (error.name === 'ValidationError') {
+    return sendClientError(req, res, 400, error.message, 'validation_failed');
+  }
+  if (error.name === 'CastError') {
+    return sendClientError(req, res, 400, 'Invalid document ID.', 'invalid_document_id');
+  }
+  if (error.status === 400) {
+    return sendClientError(req, res, 400, 'The request could not be parsed.', 'malformed_request');
+  }
   res.status(500).json({ error: 'An unexpected server error occurred.' });
 });
 

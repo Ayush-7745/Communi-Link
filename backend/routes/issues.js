@@ -4,6 +4,7 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import { requireRole } from '../middleware/auth.js';
 import { wasUploadedBy } from '../services/blobStorage.js';
+import { sendClientError } from '../utils/httpResponse.js';
 
 const router = Router();
 
@@ -89,13 +90,25 @@ router.post('/', requireRole('citizen'), async (req, res, next) => {
   try {
     const { title, description, category, urgency, lat, lng, locationAddress, imageUrl, imageBlob, deadline } = req.body;
     if (!title || !description || !category || !validCoordinates(lat, lng)) {
-      return res.status(400).json({ error: 'title, description, category, lat, and lng are required.' });
+      return sendClientError(
+        req,
+        res,
+        400,
+        'Title, description, category, and valid latitude and longitude coordinates are required.',
+        'missing_or_invalid_issue_fields'
+      );
     }
     if (locationAddress !== undefined && typeof locationAddress !== 'string') {
-      return res.status(400).json({ error: 'locationAddress must be a string.' });
+      return sendClientError(req, res, 400, 'locationAddress must be a string.', 'invalid_location_address');
     }
     if (imageBlob && !(await wasUploadedBy(imageBlob, req.uid))) {
-      return res.status(403).json({ error: 'The issue image must be uploaded by the reporting Citizen.' });
+      return sendClientError(
+        req,
+        res,
+        403,
+        'The issue image must be uploaded by the reporting Citizen.',
+        'issue_image_not_owned_by_reporter'
+      );
     }
     const issue = await Issue.create({
       title, description, category, urgency, lat, lng, locationAddress, imageUrl, imageBlob, deadline,
@@ -118,7 +131,7 @@ router.get('/:id', async (req, res, next) => {
     const issue = await Issue.findById(req.params.id).lean();
     if (!issue) return res.status(404).json({ error: 'Issue not found.' });
     if (req.profile.role === 'citizen' && issue.reportedBy !== req.uid) {
-      return res.status(403).json({ error: 'You cannot read this issue.' });
+      return sendClientError(req, res, 403, 'You cannot read this issue.', 'issue_not_owned_by_citizen');
     }
     res.json(issue);
   } catch (error) {
@@ -200,7 +213,13 @@ router.patch('/:id/complete', requireRole('volunteer'), async (req, res, next) =
   try {
     const { completionProofBlob } = req.body;
     if (!completionProofBlob || !(await wasUploadedBy(completionProofBlob, req.uid))) {
-      return res.status(403).json({ error: 'Upload a completion image before completing your assigned issue.' });
+      return sendClientError(
+        req,
+        res,
+        403,
+        'Upload a completion image before completing your assigned issue.',
+        'completion_proof_missing_or_not_owned'
+      );
     }
     const update = {
       status: 'completed',

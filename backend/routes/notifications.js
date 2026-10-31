@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Notification from '../models/Notification.js';
 import { requireRole } from '../middleware/auth.js';
+import { sendClientError } from '../utils/httpResponse.js';
 
 const router = Router();
 router.use(requireRole('citizen', 'volunteer', 'ngo'));
@@ -17,8 +18,18 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { userId = req.uid, type, title, message, issueId } = req.body;
-    if (userId !== req.uid) return res.status(403).json({ error: 'Notifications can only be created for the authenticated user.' });
-    if (!type || !title || !message) return res.status(400).json({ error: 'type, title, and message are required.' });
+    if (userId !== req.uid) {
+      return sendClientError(
+        req,
+        res,
+        403,
+        'Notifications can only be created for the authenticated user.',
+        'notification_user_id_mismatch'
+      );
+    }
+    if (!type || !title || !message) {
+      return sendClientError(req, res, 400, 'type, title, and message are required.', 'missing_notification_fields');
+    }
     const notification = await Notification.create({ userId: req.uid, type, title, message, issueId, read: false });
     res.status(201).json(notification);
   } catch (error) {

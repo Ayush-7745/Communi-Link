@@ -1,7 +1,10 @@
 import { auth } from '../config/firebase';
 import type { Issue } from '../types/issue';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL?.trim();
+if (!API_URL) {
+  throw new Error('VITE_API_URL must be set to the backend API URL before building or running the frontend.');
+}
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
