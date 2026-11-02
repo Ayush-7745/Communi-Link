@@ -1,10 +1,14 @@
 import { auth } from '../config/firebase';
 import type { Issue } from '../types/issue';
 
-const API_URL = import.meta.env.VITE_API_URL?.trim();
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const API_URL = configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:5000' : '');
 if (!API_URL) {
-  throw new Error('VITE_API_URL must be set to the backend API URL before building or running the frontend.');
+  throw new Error('VITE_API_URL must be set to the backend API URL in production.');
 }
+const API_BASE_URL = API_URL.replace(/\/+$/, '');
+const REQUEST_TIMEOUT_MS = 30_000;
+const RETRY_DELAY_MS = 3_000;
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -88,13 +92,41 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${API_URL.replace(/\/$/, '')}${path}`, { ...options, headers });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new ApiError(payload?.error || `API request failed (${response.status}).`, response.status);
+  const url = `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  let result: T | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, { ...options, headers, signal: controller.signal });
+      if (!response.ok) {
+        let payload: { error?: string } | null = null;
+        try {
+          payload = await response.json() as { error?: string };
+        } catch (error) {
+          if (error instanceof TypeError) throw error;
+        }
+        throw new ApiError(payload?.error || `API request failed (${response.status}).`, response.status);
+      }
+      result = response.status === 204 ? undefined as T : hydrate(await response.json()) as T;
+      break;
+    } catch (error) {
+      const shouldRetry = attempt === 0 && (timedOut || error instanceof TypeError);
+      if (!shouldRetry) throw error;
+      window.clearTimeout(timeout);
+      await new Promise<void>((resolve) => window.setTimeout(resolve, RETRY_DELAY_MS));
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
-  if (response.status === 204) return undefined as T;
-  return hydrate(await response.json()) as T;
+
+  return result as T;
 }
 
 const json = (method: string, body?: unknown): RequestInit => ({
