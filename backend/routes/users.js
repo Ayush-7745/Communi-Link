@@ -35,6 +35,16 @@ function coordinates(location) {
   return null;
 }
 
+function validLocation(location) {
+  if (typeof location !== 'string') return Boolean(coordinates(location));
+  const value = location.trim();
+  if (!value) return false;
+  const parts = value.split(',');
+  const looksLikeCoordinates = parts.length === 2
+    && parts.every((part) => Number.isFinite(Number.parseFloat(part.trim())));
+  return !looksLikeCoordinates || Boolean(coordinates(value));
+}
+
 router.post('/', async (req, res, next) => {
   try {
     if (req.body.userId && req.body.userId !== req.uid) {
@@ -53,12 +63,12 @@ router.post('/', async (req, res, next) => {
         'email_mismatch'
       );
     }
-    if (req.body.location != null && !coordinates(req.body.location)) {
+    if (req.body.location != null && !validLocation(req.body.location)) {
       return sendClientError(
         req,
         res,
         400,
-        'Location must contain valid latitude and longitude coordinates.',
+        'Location must be a non-empty address or contain valid latitude and longitude coordinates.',
         'invalid_location_coordinates'
       );
     }
@@ -101,12 +111,12 @@ router.get('/me', async (req, res, next) => {
 
 router.patch('/me', requireRole('citizen', 'volunteer', 'ngo'), async (req, res, next) => {
   try {
-    if (req.body.location != null && !coordinates(req.body.location)) {
+    if (req.body.location != null && !validLocation(req.body.location)) {
       return sendClientError(
         req,
         res,
         400,
-        'Location must contain valid latitude and longitude coordinates.',
+        'Location must be a non-empty address or contain valid latitude and longitude coordinates.',
         'invalid_location_coordinates'
       );
     }

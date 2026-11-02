@@ -1,18 +1,41 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sun, Moon, Monitor, User, Mail, Phone, Lock, Bell, Shield, Globe, AlertTriangle, Upload, CheckCircle } from 'lucide-react';
+import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
+import { toast } from 'sonner';
+import { auth } from '../../../config/firebase';
+import { api } from '../../../services/api';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
 
-export function SettingsPage() {
+export function SettingsPage({ onLogout }: { onLogout?: () => void } = {}) {
   const { theme, setTheme, effectiveTheme } = useTheme();
-  const { userProfile, updateUserProfile, uploadProfilePhoto } = useUser();
+  const { userProfile, updateUserProfile, uploadProfilePhoto, clearSessionState } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDark = effectiveTheme === 'dark';
+  const [profileDraft, setProfileDraft] = useState({ fullName: '', phone: '' });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    setProfileDraft({
+      fullName: userProfile?.fullName || '',
+      phone: userProfile?.phone || '',
+    });
+  }, [userProfile?.userId, userProfile?.fullName, userProfile?.phone]);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      uploadProfilePhoto(file);
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile photos must be 5 MB or smaller.');
+      e.target.value = '';
+      return;
+    }
+    try {
+      await uploadProfilePhoto(file);
+      toast.success('Profile photo updated.');
+    } catch (error) {
+      console.error('Unable to upload profile photo:', error);
+      toast.error(error instanceof Error ? error.message : 'Unable to upload profile photo.');
     }
   };
 
@@ -38,10 +61,70 @@ export function SettingsPage() {
     confirmPassword: '',
   });
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handleProfileSave = async () => {
+    if (!profileDraft.fullName.trim()) {
+      toast.error('Full name is required.');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      await api.updateProfile({
+        fullName: profileDraft.fullName.trim(),
+        phone: profileDraft.phone.trim(),
+      });
+      updateUserProfile({
+        fullName: profileDraft.fullName.trim(),
+        phone: profileDraft.phone.trim(),
+      });
+      toast.success('Profile updated.');
+    } catch (error) {
+      console.error('Unable to save profile settings:', error);
+      toast.error(error instanceof Error ? error.message : 'Unable to save profile settings.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Changing password...');
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    if (!auth.currentUser?.email) {
+      toast.error('You must be signed in with an email account to change your password.');
+      return;
+    }
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      toast.error('Enter your current password and a new password.');
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('The new passwords do not match.');
+      return;
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, passwordData.currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, passwordData.newPassword);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password changed successfully.');
+    } catch (error) {
+      console.error('Unable to change password:', error);
+      toast.error(error instanceof Error ? error.message : 'Unable to change password.');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (onLogout) {
+      onLogout();
+      return;
+    }
+    try {
+      await signOut(auth);
+      clearSessionState();
+    } catch (error) {
+      console.error('Unable to log out:', error);
+      toast.error(error instanceof Error ? error.message : 'Unable to log out.');
+    }
   };
 
   return (
@@ -95,8 +178,8 @@ export function SettingsPage() {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                value={userProfile?.fullName || ""}
-                onChange={(e) => updateUserProfile({ fullName: e.target.value })}
+                value={profileDraft.fullName}
+                onChange={(e) => setProfileDraft({ ...profileDraft, fullName: e.target.value })}
                 className={`w-full pl-11 pr-4 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
             </div>
@@ -109,7 +192,7 @@ export function SettingsPage() {
               <input
                 type="email"
                 value={userProfile?.email || ""}
-                onChange={(e) => updateUserProfile({ email: e.target.value })}
+                readOnly
                 className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-green-600">
@@ -125,8 +208,8 @@ export function SettingsPage() {
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="tel"
-                value={userProfile?.phone || ""}
-                onChange={(e) => updateUserProfile({ phone: e.target.value })}
+                value={profileDraft.phone}
+                onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })}
                 className={`w-full pl-11 pr-24 py-3 border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-900'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0d9488] focus:border-transparent`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-green-600">
@@ -171,6 +254,14 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => void handleProfileSave()}
+            disabled={isSavingProfile}
+            className="mt-5 px-6 py-2 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSavingProfile ? 'Saving…' : 'Save Profile'}
+          </button>
         </div>
       </div>
 
@@ -229,8 +320,8 @@ export function SettingsPage() {
         </form>
 
         <div className={`mt-6 pt-6 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button className="text-sm text-red-600 hover:underline">
-            Logout from all devices
+          <button type="button" onClick={() => void handleLogout()} className="text-sm text-red-600 hover:underline">
+            Log out from this device
           </button>
         </div>
       </div>
@@ -372,7 +463,13 @@ export function SettingsPage() {
           </div>
 
           <div className={`pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <button className="text-sm text-red-600 hover:underline">Report Abuse</button>
+            <button
+              type="button"
+              onClick={() => toast.info('Abuse reporting is not configured in this project yet.')}
+              className="text-sm text-red-600 hover:underline"
+            >
+              Report Abuse
+            </button>
           </div>
         </div>
       </div>
@@ -391,7 +488,13 @@ export function SettingsPage() {
             </div>
             <span className={`px-3 py-1 ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'} text-sm rounded-full`}>Verified</span>
           </div>
-          <button className="text-sm text-[#0d9488] hover:underline">Re-upload ID Proof</button>
+          <button
+            type="button"
+            onClick={() => toast.info('ID proof re-upload is not configured in this project yet.')}
+            className="text-sm text-[#0d9488] hover:underline"
+          >
+            Re-upload ID Proof
+          </button>
         </div>
       </div>
 
@@ -487,7 +590,7 @@ export function SettingsPage() {
               <h3 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Delete Account</h3>
             </div>
             <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} mb-6`}>
-              Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.
+              Account deletion is not supported in this project yet. Your account and data will not be changed.
             </p>
             <div className="flex gap-3">
               <button
@@ -497,10 +600,10 @@ export function SettingsPage() {
                 Cancel
               </button>
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={() => toast.info('Account deletion is not configured in this project yet.')}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                Delete Account
+                Unavailable
               </button>
             </div>
           </div>
@@ -518,7 +621,7 @@ export function SettingsPage() {
               <h3 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Deactivate Account</h3>
             </div>
             <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} mb-6`}>
-              Your account will be temporarily disabled. You can reactivate it anytime by logging in again.
+              Account deactivation is not supported in this project yet. Your account will remain active.
             </p>
             <div className="flex gap-3">
               <button
@@ -528,10 +631,10 @@ export function SettingsPage() {
                 Cancel
               </button>
               <button
-                onClick={() => setShowDeactivateModal(false)}
+                onClick={() => toast.info('Account deactivation is not configured in this project yet.')}
                 className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
               >
-                Deactivate
+                Unavailable
               </button>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { Notifications } from './Notifications';
 import { SettingsPage } from './SettingsPage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { Issue } from "../../../types/issue";
 
 interface Props {
@@ -24,13 +25,30 @@ export const CitizenDashboard = ({ onLogout, issues }: Props) => {
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { effectiveTheme } = useTheme();
   const { userProfile } = useUser();
+  const { notifications } = useNotifications();
 
   const isDark = effectiveTheme === 'dark';
   const myIssues = issues.filter(
     i => i.reportedBy === userProfile?.userId
   );
+  const query = searchQuery.trim().toLocaleLowerCase();
+  const matchingIssues = query
+    ? myIssues
+      .filter((issue) => [
+        issue.title,
+        issue.description,
+        issue.category,
+        issue.locationAddress,
+        issue.status,
+      ].some((value) => value?.toLocaleLowerCase().includes(query)))
+      .slice(0, 5)
+    : [];
+  const unreadCount = notifications.filter(
+    (notification) => notification.userId === userProfile?.userId && !notification.read
+  ).length;
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'report', label: 'Report Issue', icon: FileText },
@@ -129,23 +147,47 @@ export const CitizenDashboard = ({ onLogout, issues }: Props) => {
               >
                 <Menu className="w-6 h-6" />
               </button>
-              <div className={`hidden md:flex items-center gap-3 ${isDark ? 'bg-gray-700' : 'bg-gray-100'} rounded-lg px-4 py-2 w-96`}>
+              <div className={`relative hidden md:flex items-center gap-3 ${isDark ? 'bg-gray-700' : 'bg-gray-100'} rounded-lg px-4 py-2 w-96`}>
                 <Search className="w-5 h-5 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search issues..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  aria-label="Search your reported issues"
                   className={`bg-transparent outline-none w-full ${isDark ? 'text-gray-200 placeholder-gray-500' : 'text-gray-700 placeholder-gray-400'}`}
                 />
+                {searchQuery.trim() && (
+                  <div className={`absolute left-0 top-full z-50 mt-2 w-full rounded-lg border shadow-lg ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                    {matchingIssues.length ? matchingIssues.map((issue) => (
+                      <button
+                        key={issue.id}
+                        type="button"
+                        onClick={() => {
+                          if (issue.id) handleViewIssueDetails(issue.id);
+                          setSearchQuery('');
+                        }}
+                        className={`block w-full px-4 py-3 text-left ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}
+                      >
+                        <span className={`block truncate text-sm ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{issue.title}</span>
+                        <span className={`block truncate text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{issue.category} · {issue.status}</span>
+                      </button>
+                    )) : (
+                      <p className={`px-4 py-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No matching issues</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setCurrentPage('notifications')}
+                aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
                 className={`relative p-2 ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'} rounded-lg transition-colors`}
               >
                 <Bell className="w-6 h-6" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
               </button>
               <div className="flex items-center gap-3">
                 {userProfile?.profilePhoto ? (
@@ -188,7 +230,7 @@ export const CitizenDashboard = ({ onLogout, issues }: Props) => {
             />
           )}
           {currentPage === 'notifications' && <Notifications />}
-          {currentPage === 'settings' && <SettingsPage />}
+          {currentPage === 'settings' && <SettingsPage onLogout={onLogout} />}
         </main>
       </div>
 

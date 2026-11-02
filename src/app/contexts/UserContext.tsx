@@ -27,7 +27,7 @@ interface UserContextType {
   setUserProfile: (profile: UserProfile | null) => void;
   clearSessionState: () => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
-  uploadProfilePhoto: (file: File) => void;
+  uploadProfilePhoto: (file: File) => Promise<void>;
   currentUserLocation: { lat: number, lng: number } | null;
   currentUserLocationAddress: string | null;
   isDetectingLocation: boolean;
@@ -151,14 +151,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUserProfile((prev) => prev ? { ...prev, ...updates } : prev);
   };
 
-  const uploadProfilePhoto = (file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setUserProfile((prev) =>
-        prev ? { ...prev, profilePhoto: reader.result as string } : prev
-      );
-    };
-    reader.readAsDataURL(file);
+  const uploadProfilePhoto = async (file: File) => {
+    const profilePhoto = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') resolve(reader.result);
+        else reject(new Error('Unable to read the selected image.'));
+      };
+      reader.onerror = () => reject(reader.error || new Error('Unable to read the selected image.'));
+      reader.readAsDataURL(file);
+    });
+    await api.updateProfile({ profilePhoto });
+    setUserProfile((prev) => prev ? { ...prev, profilePhoto } : prev);
   };
 
   const clearSessionState = () => {

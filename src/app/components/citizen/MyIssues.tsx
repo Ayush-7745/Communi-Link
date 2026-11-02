@@ -16,11 +16,12 @@ export function MyIssues({ onViewDetails }: MyIssuesProps) {
 
   const filterOptions = [
     { value: 'all', label: 'All Issues' },
-    { value: 'Pending', label: 'Pending' },
-    { value: 'Accepted', label: 'Accepted' },
-    { value: 'Assigned', label: 'Assigned' },
-    { value: 'Completed', label: 'Completed' },
-    { value: 'Rejected', label: 'Rejected' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'approved', label: 'Accepted' },
+    { value: 'assigned', label: 'In Progress' },
+    { value: 'completed', label: 'Pending Verification' },
+    { value: 'verified', label: 'Resolved' },
+    { value: 'rejected', label: 'Rejected' },
   ];
 
   const getStatusColor = (status: string) => {
@@ -48,24 +49,9 @@ export function MyIssues({ onViewDetails }: MyIssuesProps) {
   const { userProfile } = useUser();
   if (!userProfile?.userId) return null;
   const filteredIssues = issues.filter(issue => {
-    // ✅ Only citizen's own issues
     if (issue.reportedBy !== userProfile?.userId) return false;
-
-    // ✅ SHOW ALL (including completed)
     if (filterStatus === 'all') return true;
-
-    if (filterStatus === 'Pending') return issue.status === 'pending';
-
-    if (filterStatus === 'Accepted' || filterStatus === 'Assigned')
-      return issue.status === 'assigned' || issue.status === 'completed';
-
-    if (filterStatus === 'Completed')
-      return issue.status === 'verified';
-
-    if (filterStatus === 'Rejected')
-      return issue.status === 'rejected';
-
-    return true;
+    return issue.status === filterStatus;
   });
 
   return (
@@ -112,9 +98,10 @@ export function MyIssues({ onViewDetails }: MyIssuesProps) {
                       {issue.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
                       {
                         issue.status === 'pending' ? 'Pending' :
+                          issue.status === 'approved' ? 'Accepted' :
                           issue.status === 'assigned' ? 'In Progress' :
                             issue.status === 'completed' ? 'Pending Verification' :
-                              issue.status === 'verified' ? 'Verified' :
+                              issue.status === 'verified' ? 'Resolved' :
                                 issue.status === 'rejected' ? 'Rejected' :
                                   issue.status
                       }

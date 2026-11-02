@@ -3,7 +3,7 @@ import { Mail, Lock, Phone, MapPin, Upload, Building2, FileText, Calendar, Globe
 import { createUserWithEmailAndPassword, deleteUser, signOut } from "firebase/auth";
 import { auth } from "../../config/firebase";
 import { api } from "../../services/api";
-import { useUser, type UserProfile } from "../contexts/UserContext";
+import { useUser } from "../contexts/UserContext";
 
 interface SignupPageProps {
   onBackToLogin: () => void;
@@ -12,7 +12,7 @@ interface SignupPageProps {
 type UserType = 'volunteer' | 'ngo' | 'citizen';
 
 export function SignupPage({ onBackToLogin }: SignupPageProps) {
-  const { setUserProfile } = useUser();
+  const { clearSessionState } = useUser();
   const initialRole = new URLSearchParams(window.location.search).get("role");
   const defaultRole: UserType = (initialRole === 'citizen' || initialRole === 'ngo' || initialRole === 'volunteer') ? initialRole : 'volunteer';
   const [userType, setUserType] = useState<UserType>(defaultRole);
@@ -130,7 +130,7 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
       const user = userCredential.user;
 
       try {
-        const savedProfile = await api.createProfile({
+        await api.createProfile({
           userId: user.uid,
           email,
           role: userType,
@@ -138,7 +138,6 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
           profilePhoto: null,
           ...profileData
         });
-        setUserProfile(savedProfile as unknown as UserProfile);
       } catch (profileError) {
         console.error("Signup profile creation failed:", profileError);
         try {
@@ -154,6 +153,15 @@ export function SignupPage({ onBackToLogin }: SignupPageProps) {
           return;
         }
         alert("We could not save your profile. The newly created account was removed; please try again.");
+        return;
+      }
+
+      try {
+        await signOut(auth);
+        clearSessionState();
+      } catch (signOutError) {
+        console.error("Unable to sign out after successful registration:", signOutError);
+        alert("Your account was created, but we could not sign you out automatically. Please log out before signing in.");
         return;
       }
 

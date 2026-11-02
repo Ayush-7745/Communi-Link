@@ -22,6 +22,7 @@ export interface Notification {
 interface NotificationContextType {
     notifications: Notification[];
     addNotification: (data: Omit<Notification, "id" | "createdAt" | "read">) => Promise<void>;
+    markAllNotificationsRead: () => Promise<void>;
     deleteNotification: (id: string) => Promise<void>;
 }
 
@@ -47,12 +48,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     ) => {
         await api.createNotification(data as unknown as Record<string, unknown>);
     };
+    const markAllNotificationsRead = async () => {
+        const unreadNotifications = notifications.filter((notification) => !notification.read);
+        await Promise.all(unreadNotifications.map((notification) => api.markNotificationRead(notification.id)));
+        const unreadIds = new Set(unreadNotifications.map((notification) => notification.id));
+        setNotifications((current) => current.map((notification) =>
+            unreadIds.has(notification.id) ? { ...notification, read: true } : notification
+        ));
+    };
     const deleteNotification = async (id: string) => {
         await api.deleteNotification(id);
+        setNotifications((current) => current.filter((notification) => notification.id !== id));
     };
 
     return (
-        <NotificationContext.Provider value={{ notifications, addNotification, deleteNotification }}>
+        <NotificationContext.Provider value={{ notifications, addNotification, markAllNotificationsRead, deleteNotification }}>
             {children}
         </NotificationContext.Provider>
     );
