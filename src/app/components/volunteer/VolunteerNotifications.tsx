@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 
 export function VolunteerNotifications() {
   const { effectiveTheme } = useTheme();
-  const { notifications, deleteNotification } = useNotifications();
+  const { notifications, notificationsLoading, notificationsError, deleteNotification } = useNotifications();
 
   const isDark = effectiveTheme === 'dark';
 
@@ -13,11 +13,12 @@ export function VolunteerNotifications() {
       <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
         Notifications
       </h1>
+      {notificationsError && <p role="alert" className="text-sm text-red-600">{notificationsError}</p>}
 
       {notifications.length === 0 ? (
         <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-6`}>
           <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
-            No new notifications
+            {notificationsLoading ? 'Loading notifications...' : notificationsError || 'No new notifications'}
           </p>
         </div>
       ) : (

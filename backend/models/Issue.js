@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ISSUE_STATUS } from '../utils/issueLifecycle.js';
 
 const issueSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
@@ -13,8 +14,8 @@ const issueSchema = new mongoose.Schema({
   assignedVolunteerName: { type: String, default: null },
   status: {
     type: String,
-    enum: ['pending', 'approved', 'assigned', 'completed', 'verified'],
-    default: 'pending',
+    enum: Object.values(ISSUE_STATUS),
+    default: ISSUE_STATUS.PENDING,
     index: true,
   },
   lat: { type: Number, required: true, min: -90, max: 90 },
@@ -29,6 +30,18 @@ const issueSchema = new mongoose.Schema({
   deadline: String,
   completedAt: Date,
   assignedAt: Date,
-}, { timestamps: true, strict: false });
+  verifiedBy: String,
+  verifiedAt: Date,
+}, {
+  timestamps: true,
+  strict: false,
+  toJSON: {
+    virtuals: true,
+    transform(_document, result) {
+      result.id = String(result._id);
+      return result;
+    },
+  },
+});
 
 export default mongoose.model('Issue', issueSchema);

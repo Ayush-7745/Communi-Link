@@ -1,30 +1,46 @@
+import { useEffect, useState } from 'react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, CheckCircle, Clock, AlertTriangle, Target } from 'lucide-react';
+import { api, pollEvery } from '../../../services/api';
 
 export function Analytics() {
   const { issues } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
+  const [analytics, setAnalytics] = useState<Awaited<ReturnType<typeof api.getAnalytics>> | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  useEffect(() => pollEvery(
+    api.getAnalytics,
+    (data) => {
+      setAnalytics(data);
+      setAnalyticsError(null);
+    },
+    (error) => setAnalyticsError(error instanceof Error ? error.message : 'Unable to load analytics.')
+  ), []);
 
   // Category statistics for bar chart
-  const categoryStats = Object.entries(
+  const categoryStats = analytics?.byCategory.map(({ category, count }) => ({
+    name: category || 'Uncategorized',
+    value: count,
+  })) || Object.entries(
     issues.reduce((acc, issue) => {
       acc[issue.category] = (acc[issue.category] || 0) + 1;
       return acc;
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value }));
 
-  // Status distribution for pie chart (alias completed into assigned for display)
-  const statusStats = Object.entries(
-    issues.reduce((acc, issue) => {
-      const displayStatus = issue.status === 'completed' || issue.status === 'assigned' ? 'In Progress' : issue.status === 'verified' ? 'Completed' : issue.status;
-      acc[displayStatus] = (acc[displayStatus] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name, value }));
-
+  // Keep lifecycle statuses distinct in the chart.
+  const statusCounts = analytics?.byStatus || issues.reduce((acc, issue) => {
+    acc[issue.status] = (acc[issue.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const statusStats = Object.entries(statusCounts).map(([status, value]) => {
+    const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
+    return { name: displayStatus, value };
+  });
   // Urgency breakdown for pie chart
   const urgencyStats = Object.entries(
     issues.reduce((acc, issue) => {
@@ -67,10 +83,12 @@ export function Analytics() {
   const timelineData = generateTimelineData();
 
   // Key metrics
-  const totalIssues = issues.length;
-  const completedIssues = issues.filter(i => i.status === 'verified').length;
-  const activeIssues = issues.filter(i => i.status === 'assigned' || i.status === 'approved' || i.status === 'completed').length;
-  const pendingIssues = issues.filter(i => i.status === 'pending').length;
+  const totalIssues = analytics?.total ?? issues.length;
+  const completedIssues = analytics?.verified ?? issues.filter(i => i.status === 'verified').length;
+  const activeIssues = analytics
+    ? analytics.assigned + analytics.approved + analytics.completed
+    : issues.filter(i => i.status === 'assigned' || i.status === 'approved' || i.status === 'completed').length;
+  const pendingIssues = analytics?.pending ?? issues.filter(i => i.status === 'pending').length;
   const completionRate = totalIssues > 0 ? Math.round((completedIssues / totalIssues) * 100) : 0;
 
   let totalResponseTimeMs = 0;
@@ -110,6 +128,7 @@ export function Analytics() {
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Analytics & Insights</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Track performance metrics and data trends</p>
       </div>
+      {analyticsError && <p role="alert" className="text-sm text-red-600">{analyticsError}</p>}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

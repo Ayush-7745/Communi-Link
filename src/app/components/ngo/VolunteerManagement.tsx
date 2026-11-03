@@ -36,19 +36,14 @@ export function VolunteerManagement() {
   const [fetchedVolunteers, setFetchedVolunteers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!ngoLocation) {
-      setFetchedVolunteers([]);
-      return;
-    }
-
     return pollEvery(
-      () => api.getDirectory('volunteer', ngoLocation),
+      api.getVolunteers,
       (users) => setFetchedVolunteers(users.map((data) => {
         const location = data.location as { lat?: number; lng?: number } | undefined;
         const createdAt = data.createdAt as { seconds?: number } | undefined;
         return {
           ...data,
-          id: data.userId,
+          id: String(data.userId || ''),
           name: data.fullName || data.name || 'Volunteer',
           skills: data.skills && (data.skills as unknown[]).length > 0 ? data.skills : ['Community Helper'],
           availability: data.availability || 'Flexible',
@@ -66,7 +61,7 @@ export function VolunteerManagement() {
           volLat: location?.lat ?? null,
           volLng: location?.lng ?? null,
         };
-      }))
+      }).filter((volunteer) => volunteer.id))
     );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
@@ -91,7 +86,7 @@ export function VolunteerManagement() {
   // Only show volunteers within 15km of the NGO (or all while location is still resolving)
   const RADIUS_KM = 15;
   const nearbyVolunteers = ngoLocation
-    ? volunteers.filter(v => v.distanceKm !== null && v.distanceKm <= RADIUS_KM)
+    ? volunteers.filter(v => v.distanceKm === null || v.distanceKm <= RADIUS_KM)
     : volunteers;
 
   const filteredVolunteers = nearbyVolunteers.filter(v => {

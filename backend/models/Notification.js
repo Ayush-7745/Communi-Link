@@ -7,6 +7,16 @@ const notificationSchema = new mongoose.Schema({
   message: { type: String, required: true },
   issueId: String,
   read: { type: Boolean, default: false },
-}, { timestamps: true, strict: false });
+}, {
+  timestamps: true,
+  strict: false,
+  toJSON: {
+    virtuals: true,
+    transform(_document, result) {
+      result.id = String(result._id);
+      return result;
+    },
+  },
+});
 
 export default mongoose.model('Notification', notificationSchema);

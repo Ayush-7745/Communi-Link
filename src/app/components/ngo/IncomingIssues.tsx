@@ -1,20 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MapPin, Calendar, Eye, CheckCircle, X, AlertTriangle, Clock } from 'lucide-react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
 import { useUser } from '../../contexts/UserContext';
+import { api } from '../../../services/api';
 
 interface IncomingIssuesProps {
   onViewIssue: (issueId: string) => void;
 }
 
 export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
-  const { issues, updateIssue } = useIssues();
+  const { issues, issuesLoading, issuesError, updateIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const { userProfile } = useUser();
   const isDark = effectiveTheme === 'dark';
   const [filter, setFilter] = useState<string>('all');
+  const [volunteers, setVolunteers] = useState<{ id: string; name: string }[]>([]);
+  const [volunteerError, setVolunteerError] = useState<string | null>(null);
+  const [selectedVolunteers, setSelectedVolunteers] = useState<Record<string, string>>({});
+  const [busyIssue, setBusyIssue] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.getVolunteers()
+      .then((users) => {
+        if (!active) return;
+        setVolunteerError(null);
+        setVolunteers(users.map((user) => ({
+          id: String(user.userId || ''),
+          name: String(user.fullName || user.name || 'Volunteer'),
+        })).filter((user) => user.id));
+      })
+      .catch((error) => {
+        console.error('Unable to load volunteers for issue assignment:', error);
+        if (active) setVolunteerError(error instanceof Error ? error.message : 'Unable to load volunteers.');
+      });
+    return () => { active = false; };
+  }, []);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // km
@@ -29,12 +52,33 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
   // Get pending issues (geo-filtering is now handled globally in IssuesContext)
   const pendingIssues = issues.filter(i => i.status === 'pending');
 
-  console.log("NGO Fetch Array [PENDING/LOCAL]:", pendingIssues);
+  const handleAccept = async (issueId: string) => {
+    await updateIssue(issueId, { status: 'approved' });
+  };
 
-  const handleAccept = (issueId: string) => {
-    updateIssue(issueId, {
-      status: 'approved'
-    });
+  const handleAssign = async (issueId: string) => {
+    const volunteerId = selectedVolunteers[issueId];
+    if (!volunteerId) {
+      alert('Select a volunteer before assigning this issue.');
+      return;
+    }
+    setBusyIssue(issueId);
+    try {
+      const issue = issues.find((item) => item.id === issueId);
+      if (issue?.status === 'pending') {
+        const approved = await updateIssue(issueId, { status: 'approved' });
+        if (!approved) return;
+      }
+      const assigned = await updateIssue(issueId, {
+        status: 'assigned',
+        assignedVolunteerId: volunteerId,
+      });
+      if (assigned) {
+        setSelectedVolunteers((current) => ({ ...current, [issueId]: '' }));
+      }
+    } finally {
+      setBusyIssue(null);
+    }
   };
 
   const handleReject = (issueId: string) => {
@@ -77,6 +121,8 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Incoming Issues</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Review and accept citizen-reported issues</p>
       </div>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
+      {volunteerError && <p role="alert" className="text-sm text-red-600">{volunteerError}</p>}
 
       {/* Filter Buttons */}
       <div className="flex gap-3">
@@ -108,7 +154,9 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
       <div className="grid grid-cols-1 gap-4">
         {pendingIssues.length === 0 ? (
           <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-12 text-center`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No pending issues</p>
+            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+              {issuesLoading ? 'Loading issues...' : issuesError || 'No pending issues'}
+            </p>
           </div>
         ) : (
           pendingIssues
@@ -185,7 +233,28 @@ export function IncomingIssues({ onViewIssue }: IncomingIssuesProps) {
                       className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 hover:shadow-md transition-all whitespace-nowrap font-medium"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      Accept
+                      Approve
+                    </button>
+                    <select
+                      aria-label={`Select volunteer for ${issue.title}`}
+                      value={selectedVolunteers[issue.id!] || ''}
+                      onChange={(event) => setSelectedVolunteers((current) => ({
+                        ...current,
+                        [issue.id!]: event.target.value,
+                      }))}
+                      className={`w-full px-3 py-2 border rounded-lg ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-700'}`}
+                    >
+                      <option value="">Select volunteer</option>
+                      {volunteers.map((volunteer) => (
+                        <option key={volunteer.id} value={volunteer.id}>{volunteer.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => void handleAssign(issue.id!)}
+                      disabled={busyIssue === issue.id || volunteers.length === 0}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0d9488] text-white rounded-lg hover:bg-[#0f766e] disabled:opacity-50 transition-all whitespace-nowrap font-medium"
+                    >
+                      Assign
                     </button>
                     <button
                       onClick={() => handleReject(issue.id!)}

@@ -1,3 +1,5 @@
+import type { IssueStatus } from '../utils/issueStatus';
+
 export interface Issue {
   id?: string;
   title: string;
@@ -12,7 +14,7 @@ export interface Issue {
   assignedVolunteerId?: string | null;
   assignedVolunteerName?: string | null;
 
-  status: "pending" | "approved" | "assigned" | "completed" | "verified" | "rejected";
+  status: IssueStatus;
 
   lat: number;
   lng: number;
@@ -29,5 +31,7 @@ export interface Issue {
   createdAt?: any;
   completedAt?: any;
   assignedAt?: any;
+  verifiedBy?: string;
+  verifiedAt?: any;
   updatedAt?: any;
 }

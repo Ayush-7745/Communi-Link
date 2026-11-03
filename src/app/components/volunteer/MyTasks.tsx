@@ -6,13 +6,14 @@ import { toast } from 'sonner';
 import { MapView } from '../citizen/MapView';
 import { useUser } from '../../contexts/UserContext';
 import { api } from '../../../services/api';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 interface MyTasksProps {
   onViewTask: (taskId: string) => void;
 }
 
 export function MyTasks({ onViewTask }: MyTasksProps) {
   const { userProfile } = useUser();
-  const { issues, updateIssue } = useIssues();
+  const { issues, issuesLoading, issuesError, updateIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
   const [showProofModal, setShowProofModal] = useState(false);
@@ -59,16 +60,16 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">Pending</span>;
-      case 'approved':
-        return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">Approved</span>;
-      case 'assigned':
-        return <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">In Progress</span>;
-      case 'completed':
-        return <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">Waiting for verification</span>;
-      case 'verified':
-        return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium"><CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />Verified</span>;
+      case ISSUE_STATUS.PENDING:
+        return <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.APPROVED:
+        return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.ASSIGNED:
+        return <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.COMPLETED:
+        return <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.VERIFIED:
+        return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium"><CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />{getIssueStatusPresentation(status).label}</span>;
       default:
         return <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full font-medium">{status}</span>;
     }
@@ -109,7 +110,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
     try {
       const { blobName } = await api.uploadImage(proofImages[0]);
       const saved = await updateIssue(selectedTask, {
-        status: 'completed',
+        status: ISSUE_STATUS.COMPLETED,
         completionProofBlob: blobName,
         volunteerNotes: completionNotes,
       });
@@ -147,6 +148,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>My Tasks</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Track and manage your assigned tasks</p>
       </div>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
       {!showProofModal && (
         <div className="grid grid-cols-1 gap-4">
           {myTasks.length === 0 ? (
@@ -155,7 +157,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                 } rounded-xl shadow-sm border p-12 text-center`}
             >
               <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                No tasks assigned yet
+                {issuesLoading ? 'Loading tasks...' : issuesError || 'No tasks assigned yet'}
               </p>
             </div>
           ) : (
@@ -234,7 +236,7 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                           <Eye className="w-4 h-4" />
                           View Details
                         </button>
-                        {task.status === 'assigned' && (
+                        {task.status === ISSUE_STATUS.ASSIGNED && (
                           <button
                             onClick={() => handleMarkComplete(task.id!)}
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
@@ -243,16 +245,16 @@ export function MyTasks({ onViewTask }: MyTasksProps) {
                             Mark Complete
                           </button>
                         )}
-                        {task.status === 'completed' && (
+                        {task.status === ISSUE_STATUS.COMPLETED && (
                           <div className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg">
                             <Clock className="w-4 h-4" />
                             <span className="text-sm">Pending Verification</span>
                           </div>
                         )}
-                        {task.status === 'verified' && (
+                        {task.status === ISSUE_STATUS.VERIFIED && (
                           <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
                             <CheckCircle className="w-4 h-4" />
-                            <span className="text-sm">Completed</span>
+                            <span className="text-sm">{getIssueStatusPresentation(task.status).label}</span>
                           </div>
                         )}
                       </div>

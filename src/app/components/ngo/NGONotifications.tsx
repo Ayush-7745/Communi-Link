@@ -3,7 +3,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Bell, AlertCircle, CheckCircle, Users, Clock, Trash2, Check, Filter, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useIssues } from '../../contexts/IssuesContext';
-import { api } from '../../../services/api';
+import { toast } from 'sonner';
 
 interface NGONotificationsProps {
   onViewIssue?: (issueId: string) => void;
@@ -14,22 +14,49 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
   const isDark = effectiveTheme === 'dark';
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  const { notifications, deleteNotification } = useNotifications();
+  const {
+    notifications,
+    notificationsLoading,
+    notificationsError,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+  } = useNotifications();
   const { updateIssue } = useIssues();
 
   const markAsRead = async (id: string) => {
     try {
-      await api.markNotificationRead(id);
-    } catch (error) { console.error('Unable to mark notification as read:', error); }
+      await markNotificationRead(id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to mark notification as read.');
+    }
   };
 
   const markAllAsRead = async () => {
-    for (const notif of notifications.filter(n => !n.read)) {
-      try {
-        await api.markNotificationRead(notif.id);
-      } catch (error) {
-        console.error('Unable to mark notification as read:', error);
-      }
+    try {
+      await markAllNotificationsRead();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to mark notifications as read.');
+    }
+  };
+
+  const verifyIssueFromNotification = async (issueId: string, notificationId: string) => {
+    const updated = await updateIssue(issueId, { status: 'verified' });
+    if (!updated) return;
+    try {
+      await deleteNotification(notificationId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to remove notification.');
+    }
+  };
+
+  const returnIssueFromNotification = async (issueId: string, notificationId: string) => {
+    const updated = await updateIssue(issueId, { status: 'assigned' });
+    if (!updated) return;
+    try {
+      await deleteNotification(notificationId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to remove notification.');
     }
   };
 
@@ -41,6 +68,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
       case 'issue-verified':
         return <CheckCircle className="w-5 h-5 text-green-600" />;
       case 'issue-reported':
+      case 'issue-rejected':
       case 'new_issue':
         return <Bell className="w-5 h-5 text-blue-600" />;
       case 'task-assigned':
@@ -103,6 +131,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
             Stay updated with latest activities and alerts
           </p>
         </div>
+        {notificationsError && <p role="alert" className="text-sm text-red-600">{notificationsError}</p>}
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
@@ -156,7 +185,9 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
           <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-12 text-center`}>
             <Bell className={`w-12 h-12 ${isDark ? 'text-gray-600' : 'text-gray-400'} mx-auto mb-3`} />
             <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} text-lg`}>
-              {filter === 'unread' ? 'No unread notifications' : 'No notifications'}
+              {notificationsLoading
+                ? 'Loading notifications...'
+                : notificationsError || (filter === 'unread' ? 'No unread notifications' : 'No notifications')}
             </p>
           </div>
         ) : (
@@ -211,8 +242,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
                       <>
                         <button
                           onClick={() => {
-                            updateIssue(notification.issueId!, { status: 'verified' });
-                            deleteNotification(notification.id);
+                            void verifyIssueFromNotification(notification.issueId!, notification.id);
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 rounded-lg transition-colors"
                         >
@@ -221,8 +251,7 @@ export function NGONotifications({ onViewIssue }: NGONotificationsProps = {}) {
                         </button>
                         <button
                           onClick={() => {
-                            updateIssue(notification.issueId!, { status: 'assigned' });
-                            deleteNotification(notification.id);
+                            void returnIssueFromNotification(notification.issueId!, notification.id);
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
                         >

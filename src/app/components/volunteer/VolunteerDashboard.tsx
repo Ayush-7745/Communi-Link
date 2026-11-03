@@ -99,9 +99,9 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`flex items-center justify-between p-4 border-b ${isDark ? 'border-slate-300' : 'border-gray-200'}`}>
+          <div className={`flex h-16 shrink-0 items-center justify-between border-b px-4 ${isDark ? 'border-slate-300' : 'border-gray-200'}`}>
             <div className="flex items-center justify-center w-full">
-              <img src={logo} alt="Communi-Link" className="h-16 w-auto object-contain rounded-lg" />
+              <img src={logo} alt="Communi-Link" className="h-12 max-w-full w-auto object-contain rounded-lg" />
             </div>
             <button
               onClick={() => setIsSidebarOpen(false)}
@@ -171,8 +171,8 @@ export function VolunteerDashboard({ onLogout }: VolunteerDashboardProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navbar */}
-        <header className={`${isDark ? 'bg-white border-slate-300' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
-          <div className="flex items-center justify-between">
+        <header className={`${isDark ? 'bg-white border-slate-300' : 'bg-white border-gray-200'} flex h-16 shrink-0 items-center border-b px-6`}>
+          <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setIsSidebarOpen(true)}

@@ -3,6 +3,7 @@ import { MapPin, Calendar, Eye, CheckCircle } from 'lucide-react';
 import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 
 interface MyIssuesProps {
   onViewDetails: (issueId: string) => void;
@@ -15,23 +16,21 @@ export function MyIssues({ onViewDetails }: MyIssuesProps) {
   const isDark = effectiveTheme === 'dark';
 
   const filterOptions = [
-    { value: 'all', label: 'All Issues' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'approved', label: 'Accepted' },
-    { value: 'assigned', label: 'In Progress' },
-    { value: 'completed', label: 'Pending Verification' },
-    { value: 'verified', label: 'Resolved' },
-    { value: 'rejected', label: 'Rejected' },
+    { value: 'all', label: 'All' },
+    ...Object.values(ISSUE_STATUS).map((status) => ({
+      value: getIssueStatusPresentation(status).tab,
+      label: getIssueStatusPresentation(status).label,
+    })),
   ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-amber-100 text-amber-800';
-      case 'approved': return 'bg-green-100 text-green-700';
-      case 'assigned': return 'bg-blue-100 text-blue-700'; // In Progress
-      case 'completed': return 'bg-orange-100 text-orange-700';
-      case 'verified': return 'bg-emerald-100 text-emerald-700';
-      case 'rejected': return 'bg-red-100 text-red-700';
+      case ISSUE_STATUS.PENDING: return 'bg-amber-100 text-amber-800';
+      case ISSUE_STATUS.APPROVED: return 'bg-green-100 text-green-700';
+      case ISSUE_STATUS.ASSIGNED: return 'bg-blue-100 text-blue-700';
+      case ISSUE_STATUS.COMPLETED: return 'bg-orange-100 text-orange-700';
+      case ISSUE_STATUS.VERIFIED: return 'bg-emerald-100 text-emerald-700';
+      case ISSUE_STATUS.REJECTED: return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -95,16 +94,8 @@ export function MyIssues({ onViewDetails }: MyIssuesProps) {
                   <div className="flex items-center gap-3 mb-3">
                     <h3 className="text-lg text-gray-900">{issue.title}</h3>
                     <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(issue.status)}`}>
-                      {issue.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
-                      {
-                        issue.status === 'pending' ? 'Pending' :
-                          issue.status === 'approved' ? 'Accepted' :
-                          issue.status === 'assigned' ? 'In Progress' :
-                            issue.status === 'completed' ? 'Pending Verification' :
-                              issue.status === 'verified' ? 'Resolved' :
-                                issue.status === 'rejected' ? 'Rejected' :
-                                  issue.status
-                      }
+                      {issue.status === ISSUE_STATUS.VERIFIED && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
+                      {getIssueStatusPresentation(issue.status).label}
                     </span>
                   </div>
 

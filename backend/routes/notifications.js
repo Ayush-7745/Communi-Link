@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Notification from '../models/Notification.js';
 import { requireRole } from '../middleware/auth.js';
 import { sendClientError } from '../utils/httpResponse.js';
+import { withApiId } from '../utils/issueLifecycle.js';
 
 const router = Router();
 router.use(requireRole('citizen', 'volunteer', 'ngo'));
@@ -9,7 +10,7 @@ router.use(requireRole('citizen', 'volunteer', 'ngo'));
 router.get('/', async (req, res, next) => {
   try {
     const notifications = await Notification.find({ userId: req.uid }).sort({ createdAt: -1 }).lean();
-    res.json(notifications);
+    res.json(notifications.map(withApiId));
   } catch (error) {
     next(error);
   }
@@ -45,7 +46,19 @@ router.patch('/:id/read', async (req, res, next) => {
       { new: true }
     ).lean();
     if (!notification) return res.status(404).json({ error: 'Notification not found.' });
-    res.json(notification);
+    res.json(withApiId(notification));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/read-all', async (req, res, next) => {
+  try {
+    const result = await Notification.updateMany(
+      { userId: req.uid, read: false },
+      { $set: { read: true } }
+    );
+    res.json({ modifiedCount: result.modifiedCount });
   } catch (error) {
     next(error);
   }

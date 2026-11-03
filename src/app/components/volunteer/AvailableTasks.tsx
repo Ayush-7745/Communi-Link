@@ -45,7 +45,7 @@ interface AvailableTasksProps {
 
 export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
   const { userProfile, currentUserLocation, isDetectingLocation, detectCurrentLocation } = useUser();
-  const { issues, assignIssue } = useIssues();
+  const { issues, issuesLoading, issuesError, assignIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
   const [rejectedTasks, setRejectedTasks] = useState<string[]>([]);
@@ -119,12 +119,15 @@ export function AvailableTasks({ onViewTask }: AvailableTasksProps) {
           {isDetectingLocation ? 'Detecting location…' : 'Update my location'}
         </button>
       </div>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
 
       <div className="grid grid-cols-1 gap-4">
         {availableTasks.length === 0 ? (
           <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-12 text-center`}>
             <Navigation className={`w-10 h-10 mx-auto mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
-            <p className={`font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>No tasks within 15 km</p>
+            <p className={`font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              {issuesLoading ? 'Loading tasks...' : issuesError || 'No tasks within 15 km'}
+            </p>
             <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>There are no available tasks in your area right now. Check back later!</p>
           </div>
         ) : (

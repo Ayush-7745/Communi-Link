@@ -21,7 +21,7 @@ interface NGOHomeProps {
 }
 
 export function NGOHome({ onViewIssue }: NGOHomeProps) {
-  const { issues } = useIssues();
+  const { issues, issuesLoading, issuesError } = useIssues();
   const { userProfile, currentUserLocation } = useUser();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
@@ -48,34 +48,39 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
   const ngoLocation = currentUserLocation || resolveLocation(userProfile?.location) || null;
 
   useEffect(() => {
-    if (!ngoLocation) {
-      setFetchedVolunteers([]);
-      return;
-    }
-
     return pollEvery(
-      () => api.getDirectory('volunteer', ngoLocation),
+      api.getVolunteers,
       (users) => setFetchedVolunteers(users.map((data) => {
         const location = data.location as { lat?: number; lng?: number } | undefined;
         return {
           ...data,
-          id: data.userId,
+          id: String(data.userId || ''),
           name: data.fullName || data.name || 'Volunteer',
-          skills: data.skills || ['Helper'],
+          rating: typeof data.rating === 'number' ? data.rating : 4.5,
+          tasksCompleted: typeof data.tasksCompleted === 'number' ? data.tasksCompleted : 0,
+          skills: Array.isArray(data.skills)
+            ? data.skills.filter((skill: unknown): skill is string => typeof skill === 'string')
+            : ['Helper'],
           availability: data.availability || 'Flexible',
           volLat: typeof location?.lat === 'number' ? location.lat : null,
           volLng: typeof location?.lng === 'number' ? location.lng : null,
         };
-      }))
+      }).filter((volunteer) => volunteer.id))
     );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
-  const recommendedVolunteers = fetchedVolunteers.filter(v => {
-    if (ngoLocation && v.volLat !== null && v.volLng !== null) {
-      return getDistance(ngoLocation.lat, ngoLocation.lng, v.volLat, v.volLng) <= 15;
-    }
-    return false;
-  }).slice(0, 3);
+  const recommendedVolunteers = fetchedVolunteers
+    .map((volunteer) => ({
+      ...volunteer,
+      tasksCompleted: issues.filter((issue) =>
+        issue.assignedVolunteerId === volunteer.id && issue.status === 'verified'
+      ).length,
+    }))
+    .filter((volunteer) => {
+      if (!ngoLocation || volunteer.volLat === null || volunteer.volLng === null) return true;
+      return getDistance(ngoLocation.lat, ngoLocation.lng, volunteer.volLat, volunteer.volLng) <= 15;
+    })
+    .slice(0, 3);
 
   const totalIssues = issues.length;
   const pendingApproval = issues.filter(i => i.status === 'pending').length;
@@ -116,6 +121,8 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>NGO Command Center</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Manage community issues and coordinate volunteers</p>
       </div>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
+      {issuesLoading && <p className="text-sm text-gray-500">Loading issues...</p>}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -264,7 +271,7 @@ export function NGOHome({ onViewIssue }: NGOHomeProps) {
                 </div>
                 <h3 className={`${isDark ? 'text-gray-200' : 'text-gray-900'} mb-2`}>{volunteer.name}</h3>
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {volunteer.skills.map((skill) => (
+                  {volunteer.skills.map((skill: string) => (
                     <span key={skill} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
                       {skill}
                     </span>

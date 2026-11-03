@@ -4,7 +4,13 @@ import { useUser } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 
 export function Notifications() {
-  const { notifications, markAllNotificationsRead, deleteNotification } = useNotifications();
+  const {
+    notifications,
+    notificationsLoading,
+    notificationsError,
+    markAllNotificationsRead,
+    deleteNotification,
+  } = useNotifications();
   const { userProfile } = useUser();
 
   const filteredNotifications = notifications.filter(
@@ -63,6 +69,7 @@ export function Notifications() {
           <h1 className="text-3xl text-gray-900 mb-2">Notifications</h1>
           <p className="text-gray-600">Stay updated with your issue progress</p>
         </div>
+        {notificationsError && <p role="alert" className="text-sm text-red-600">{notificationsError}</p>}
         <button
           type="button"
           onClick={() => void handleMarkAllAsRead()}
@@ -75,6 +82,11 @@ export function Notifications() {
 
       {/* Notifications List */}
       <div className="space-y-3">
+        {filteredNotifications.length === 0 && (
+          <p className="text-sm text-gray-500">
+            {notificationsLoading ? 'Loading notifications...' : notificationsError || 'No notifications yet.'}
+          </p>
+        )}
         {filteredNotifications.map((notification) => {
           const Icon = getIcon(notification.type);
 

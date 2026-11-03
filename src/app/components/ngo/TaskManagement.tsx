@@ -4,6 +4,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { MapPin, User, CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 import { api, pollEvery } from '../../../services/api';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -20,7 +21,7 @@ interface TaskManagementProps {
 }
 
 export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
-  const { issues, updateIssue } = useIssues();
+  const { issues, issuesLoading, issuesError, updateIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
   const [filter, setFilter] = useState<string>('all');
@@ -45,34 +46,38 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
   const ngoLocation = currentUserLocation || resolveLocation(userProfile?.location) || null;
 
   // Get accepted and assigned tasks
-  const tasks = issues.filter(i => i.status === 'approved' || i.status === 'assigned' || i.status === 'completed' || i.status === 'verified');
+  const tasks = issues.filter(i =>
+    i.status === ISSUE_STATUS.APPROVED
+    || i.status === ISSUE_STATUS.ASSIGNED
+    || i.status === ISSUE_STATUS.COMPLETED
+    || i.status === ISSUE_STATUS.VERIFIED
+  );
 
   const [fetchedVolunteers, setFetchedVolunteers] = useState<any[]>([]);
+  const [volunteerError, setVolunteerError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ngoLocation) {
-      setFetchedVolunteers([]);
-      return;
-    }
-
     return pollEvery(
-      () => api.getDirectory('volunteer', ngoLocation),
+      api.getVolunteers,
       (users) => setFetchedVolunteers(users.map((data) => {
         const location = data.location as { lat?: number; lng?: number } | undefined;
         const distance = location && typeof location.lat === 'number' && typeof location.lng === 'number'
-          ? getDistance(ngoLocation.lat, ngoLocation.lng, location.lat, location.lng)
+          ? ngoLocation ? getDistance(ngoLocation.lat, ngoLocation.lng, location.lat, location.lng) : null
           : null;
         return {
           ...data,
-          id: data.userId,
-          name: data.fullName || data.name || 'Volunteer',
-          skills: data.skills || ['Community Help'],
+          id: String(data.userId || ''),
+          name: String(data.fullName || data.name || 'Volunteer'),
+          skills: Array.isArray(data.skills)
+            ? data.skills.filter((skill: unknown): skill is string => typeof skill === 'string')
+            : ['Community Help'],
           availability: data.availability || 'Flexible',
           distance: distance === null ? 'Unknown' : 'Nearby',
           volLat: location?.lat ?? null,
           volLng: location?.lng ?? null,
         };
-      }))
+      }).filter((volunteer) => volunteer.id)),
+      (error) => setVolunteerError(error instanceof Error ? error.message : 'Unable to load volunteers.')
     );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
@@ -82,7 +87,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
     const volunteer = volunteers.find(v => v.id === volunteerId);
     if (volunteer) {
       const assigned = await updateIssue(taskId, {
-        status: 'assigned',
+        status: ISSUE_STATUS.ASSIGNED,
         assignedVolunteerId: volunteerId,
         assignedVolunteerName: volunteer.name,
       });
@@ -92,21 +97,18 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
     }
   };
 
-  const handleMarkCompleted = (taskId: string) => {
-    if (confirm('Mark this task as completed?')) {
-      updateIssue(taskId, {
-        status: 'completed',
-        completedAt: new Date().toISOString().split('T')[0]
-      });
+  const handleVerify = async (taskId: string) => {
+    if (confirm('Verify this completed task?')) {
+      await updateIssue(taskId, { status: ISSUE_STATUS.VERIFIED });
     }
   };
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-100 text-green-700';
-      case 'assigned':
-      case 'completed':
+      case ISSUE_STATUS.APPROVED: return 'bg-green-100 text-green-700';
+      case ISSUE_STATUS.ASSIGNED:
+      case ISSUE_STATUS.COMPLETED:
         return 'bg-orange-100 text-orange-700';
-      case 'verified': return 'bg-emerald-100 text-emerald-700';
+      case ISSUE_STATUS.VERIFIED: return 'bg-emerald-100 text-emerald-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -155,9 +157,9 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'all') return true;
-    if (filter === 'unassigned') return task.status === 'approved' || (task.status === 'assigned' && !task.assignedVolunteerId);
-    if (filter === 'assigned') return (task.status === 'assigned' && task.assignedVolunteerId) || task.status === 'completed';
-    if (filter === 'completed') return task.status === 'verified';
+    if (filter === 'unassigned') return task.status === ISSUE_STATUS.APPROVED || (task.status === ISSUE_STATUS.ASSIGNED && !task.assignedVolunteerId);
+    if (filter === 'assigned') return (task.status === ISSUE_STATUS.ASSIGNED && task.assignedVolunteerId) || task.status === ISSUE_STATUS.COMPLETED;
+    if (filter === 'completed') return task.status === ISSUE_STATUS.VERIFIED;
     return true;
   });
 
@@ -167,6 +169,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
         <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-2`}>Task Management</h1>
         <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Manage accepted issues and assign volunteers</p>
       </div>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -200,7 +203,9 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
       <div className="grid grid-cols-1 gap-4">
         {filteredTasks.length === 0 ? (
           <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border p-12 text-center`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No tasks found</p>
+            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+              {issuesLoading ? 'Loading tasks...' : issuesError || 'No tasks found'}
+            </p>
           </div>
         ) : (
           filteredTasks.map((task) => {
@@ -226,9 +231,9 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                           {getUrgencyIcon(task.urgency)}
                           {task.urgency}
                         </span>
-                        <span className={`text-xs px-3 py-1 rounded-full ${getStatusColor(task.status === 'assigned' && !task.assignedVolunteerId ? 'approved' : task.status)}`}>
-                          {task.status === 'verified' && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
-                          {task.status === 'completed' || (task.status === 'assigned' && task.assignedVolunteerId) ? 'In Progress' : task.status === 'verified' ? 'Verified' : task.status === 'assigned' ? 'approved' : task.status}
+                        <span className={`text-xs px-3 py-1 rounded-full $                        {getStatusColor(task.status === ISSUE_STATUS.ASSIGNED && !task.assignedVolunteerId ? ISSUE_STATUS.APPROVED : task.status)}`}>
+                          {task.status === ISSUE_STATUS.VERIFIED && <CheckCircle className="inline w-3 h-3 mr-1" aria-hidden="true" />}
+                          {getIssueStatusPresentation(task.status).label}
                         </span>
                       </div>
                     </div>
@@ -266,13 +271,13 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
 
                     {/* Deadline Status & Assigned Volunteer */}
                     <div className="flex flex-wrap items-center gap-3 mb-2">
-                      {task.deadline && taskOverdue && task.status !== 'completed' && (
+                      {task.deadline && taskOverdue && task.status !== ISSUE_STATUS.COMPLETED && (
                         <span className="inline-flex items-center gap-1 text-xs px-3 py-1 bg-red-100 text-red-700 rounded-full border border-red-200 font-medium">
                           <AlertTriangle className="w-3 h-3" />
                           Overdue by {Math.abs(daysRemaining!)} days
                         </span>
                       )}
-                      {task.deadline && !taskOverdue && daysRemaining !== null && task.status !== 'completed' && (
+                      {task.deadline && !taskOverdue && daysRemaining !== null && task.status !== ISSUE_STATUS.COMPLETED && (
                         <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full border font-medium ${daysRemaining <= 2 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                           }`}>
                           <Clock className="w-3 h-3" />
@@ -290,7 +295,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
 
                   {/* Actions */}
                   <div className="flex flex-col gap-2 min-w-[160px]">
-                    {(task.status === 'approved' || (task.status === 'assigned' && !task.assignedVolunteerId)) && (
+                    {(task.status === ISSUE_STATUS.APPROVED || (task.status === ISSUE_STATUS.ASSIGNED && !task.assignedVolunteerId)) && (
                       <button
                         onClick={() => {
                           setSelectedTask(task.id!);
@@ -310,15 +315,17 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                         View Details
                       </button>
                     )}
-                    {task.status === 'assigned' && task.assignedVolunteerId && (
+                    {task.status === ISSUE_STATUS.COMPLETED && (
+                      <button
+                        onClick={() => void handleVerify(task.id!)}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 hover:shadow-md transition-all whitespace-nowrap font-medium"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Verify
+                      </button>
+                    )}
+                    {task.status === ISSUE_STATUS.ASSIGNED && task.assignedVolunteerId && (
                       <>
-                        <button
-                          onClick={() => handleMarkCompleted(task.id!)}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 hover:shadow-md transition-all whitespace-nowrap font-medium"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          Mark Completed
-                        </button>
                         <button
                           onClick={() => {
                             setSelectedTask(task.id!);
@@ -331,7 +338,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                         </button>
                       </>
                     )}
-                    {task.status === 'verified' && (
+                    {task.status === ISSUE_STATUS.VERIFIED && (
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
                           <CheckCircle className="w-5 h-5" />
@@ -353,6 +360,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
           <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto`}>
             <h3 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Assign Volunteer</h3>
             <p className={`${isDark ? 'text-gray-400' : 'text-gray-600'} mb-6`}>Select a volunteer to assign to this task</p>
+            {volunteerError && <p role="alert" className="mb-3 text-sm text-red-600">{volunteerError}</p>}
 
             <div className="space-y-3">
               {volunteers.map((volunteer) => {
@@ -369,7 +377,7 @@ export function TaskManagement({ onViewIssue }: TaskManagementProps = {}) {
                       <div className="flex-1">
                         <h4 className={`${isDark ? 'text-gray-200' : 'text-gray-900'} mb-2`}>{volunteer.name}</h4>
                         <div className="flex flex-wrap gap-1 mb-3">
-                          {volunteer.skills.map((skill) => (
+                          {volunteer.skills.map((skill: string) => (
                             <span key={skill} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
                               {skill}
                             </span>

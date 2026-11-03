@@ -6,13 +6,14 @@ import { toast } from 'sonner';
 import { useUser } from "../../contexts/UserContext";
 import { api } from "../../../services/api";
 import { IssueImageGallery } from '../IssueImageGallery';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 interface TaskDetailsProps {
   taskId: string;
   onBack: () => void;
 }
 
 export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
-  const { getIssue, updateIssue } = useIssues();
+  const { getIssue, updateIssue, assignIssue } = useIssues();
   const { userProfile } = useUser();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
@@ -90,16 +91,16 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <span className="px-3 py-1.5 bg-amber-100 text-amber-800 text-sm rounded-full font-medium">Pending</span>;
-      case 'approved':
-        return <span className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-full font-medium">Approved</span>;
-      case 'assigned':
-        return <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-full font-medium">In Progress</span>;
-      case 'completed':
-        return <span className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded-full font-medium">Waiting for verification</span>;
-      case 'verified':
-        return <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-sm rounded-full font-medium"><CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />Verified</span>;
+      case ISSUE_STATUS.PENDING:
+        return <span className="px-3 py-1.5 bg-amber-100 text-amber-800 text-sm rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.APPROVED:
+        return <span className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.ASSIGNED:
+        return <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.COMPLETED:
+        return <span className="px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded-full font-medium">{getIssueStatusPresentation(status).label}</span>;
+      case ISSUE_STATUS.VERIFIED:
+        return <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-sm rounded-full font-medium"><CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />{getIssueStatusPresentation(status).label}</span>;
       default:
         return <span className="px-3 py-1.5 bg-slate-100 text-slate-700 text-sm rounded-full font-medium">{status}</span>;
     }
@@ -137,7 +138,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
     try {
       const { blobName } = await api.uploadImage(proofImages[0]);
       const saved = await updateIssue(taskId, {
-        status: 'completed',
+        status: ISSUE_STATUS.COMPLETED,
         completionProofBlob: blobName,
         volunteerNotes: completionNotes,
       });
@@ -204,31 +205,31 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
             <h2 className={`text-xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-4`}>Task Timeline</h2>
             <div className="space-y-4">
               <div className="flex gap-4">
-                <div className={`w-2 h-2 rounded-full mt-2 ${(task.status === 'completed' || task.status === 'verified') ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                <div className={`w-2 h-2 rounded-full mt-2 ${(task.status === ISSUE_STATUS.COMPLETED || task.status === ISSUE_STATUS.VERIFIED) ? 'bg-green-500' : 'bg-blue-500'}`}></div>
                 <div className="flex-1">
                   <p className={`${isDark ? 'text-gray-300' : 'text-gray-900'} font-medium`}>Task Reported</p>
                   <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{task.createdAt?.toDate().toLocaleTimeString() || task.createdAt?.toDate().toLocaleDateString()}</p>
                 </div>
               </div>
-              {task.status !== 'pending' && (
+              {task.status !== ISSUE_STATUS.PENDING && (
                 <div className="flex gap-4">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${(task.status === 'completed' || task.status === 'verified') ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                  <div className={`w-2 h-2 rounded-full mt-2 ${(task.status === ISSUE_STATUS.COMPLETED || task.status === ISSUE_STATUS.VERIFIED) ? 'bg-green-500' : 'bg-orange-500'}`}></div>
                   <div className="flex-1">
                     <p className={`${isDark ? 'text-gray-300' : 'text-gray-900'} font-medium`}>Task Assigned</p>
                     <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Assigned to you</p>
                   </div>
                 </div>
               )}
-              {(task.status === 'completed' || task.status === 'verified') && task.completedAt?.toDate().toLocaleDateString() && (
+              {(task.status === ISSUE_STATUS.COMPLETED || task.status === ISSUE_STATUS.VERIFIED) && task.completedAt?.toDate().toLocaleDateString() && (
                 <div className="flex gap-4">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${task.status === 'verified' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                  <div className={`w-2 h-2 rounded-full mt-2 ${task.status === ISSUE_STATUS.VERIFIED ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                   <div className="flex-1">
                     <p className={`${isDark ? 'text-gray-300' : 'text-gray-900'} font-medium`}>Task Completed</p>
                     <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{task.completedAt?.toDate().toLocaleDateString()}</p>
                   </div>
                 </div>
               )}
-              {task.status === 'verified' && (
+              {task.status === ISSUE_STATUS.VERIFIED && (
                 <div className="flex gap-4">
                   <div className="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
                   <div className="flex-1">
@@ -319,7 +320,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
           )}
 
           {/* Action Buttons */}
-          {(task.status === 'approved' || (task.status === 'assigned' && !task.assignedVolunteerId)) && (
+          {(task.status === ISSUE_STATUS.APPROVED || (task.status === ISSUE_STATUS.ASSIGNED && !task.assignedVolunteerId)) && (
             <button
               onClick={async () => {
                 if (userProfile?.userId) {
@@ -334,7 +335,7 @@ export function TaskDetails({ taskId, onBack }: TaskDetailsProps) {
             </button>
           )}
 
-          {task.status === 'assigned' && task.assignedVolunteerId === userProfile?.userId && (
+          {task.status === ISSUE_STATUS.ASSIGNED && task.assignedVolunteerId === userProfile?.userId && (
             <button
               onClick={handleMarkComplete}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg font-bold text-lg"

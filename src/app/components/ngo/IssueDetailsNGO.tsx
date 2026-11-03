@@ -5,6 +5,7 @@ import { useUser } from '../../contexts/UserContext';
 import { useState, useEffect } from 'react';
 import { api } from '../../../services/api';
 import { IssueImageGallery } from '../IssueImageGallery';
+import { ISSUE_STATUS } from '../../../utils/issueStatus';
 
 interface IssueDetailsNGOProps {
   issueId: string;
@@ -50,15 +51,15 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
   const handleAccept = async () => {
     if (!userProfile?.userId) return;
     const approved = await updateIssue(issueId, {
-      status: 'approved',
+      status: ISSUE_STATUS.APPROVED,
     });
     if (approved) onBack();
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (confirm('Are you sure you want to reject this issue?')) {
-      updateIssue(issueId, { status: 'rejected' });
-      onBack();
+      const rejected = await updateIssue(issueId, { status: ISSUE_STATUS.REJECTED });
+      if (rejected) onBack();
     }
   };
 
@@ -123,7 +124,7 @@ export function IssueDetailsNGO({ issueId, onBack }: IssueDetailsNGOProps) {
           </div>
         </div>
 
-        {issue.status === 'pending' && (
+        {issue.status === ISSUE_STATUS.PENDING && (
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <button
               onClick={handleAccept}

@@ -23,6 +23,16 @@ const userSchema = new mongoose.Schema({
   inchargeEmail: String,
   inchargePhone: String,
   website: String,
-}, { timestamps: true, strict: false });
+}, {
+  timestamps: true,
+  strict: false,
+  toJSON: {
+    virtuals: true,
+    transform(_document, result) {
+      result.id = String(result._id);
+      return result;
+    },
+  },
+});
 
 export default mongoose.model('User', userSchema);

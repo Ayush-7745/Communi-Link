@@ -9,6 +9,11 @@ if (!API_URL) {
 const API_BASE_URL = API_URL.replace(/\/+$/, '');
 const REQUEST_TIMEOUT_MS = 30_000;
 const RETRY_DELAY_MS = 3_000;
+export const WORKFLOW_UPDATED_EVENT = 'communilink:workflow-updated';
+
+export function notifyWorkflowUpdated() {
+  window.dispatchEvent(new Event(WORKFLOW_UPDATED_EVENT));
+}
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -24,6 +29,18 @@ export interface ApiTimestamp {
   toMillis: () => number;
   valueOf: () => number;
   toJSON: () => string;
+}
+
+export interface ApiAnalytics {
+  total: number;
+  pending: number;
+  approved: number;
+  assigned: number;
+  completed: number;
+  verified: number;
+  rejected: number;
+  byStatus: Record<string, number>;
+  byCategory: { category: string; count: number }[];
 }
 
 export function resolveLocation(location: unknown): { lat: number; lng: number; address?: string } | undefined {
@@ -66,7 +83,7 @@ function timestampFrom(value: string): ApiTimestamp {
 }
 
 function hydrate(value: unknown, key = ''): unknown {
-  if (typeof value === 'string' && ['createdAt', 'updatedAt', 'assignedAt', 'completedAt'].includes(key)) {
+  if (typeof value === 'string' && ['createdAt', 'updatedAt', 'assignedAt', 'completedAt', 'verifiedAt'].includes(key)) {
     const time = Date.parse(value);
     if (Number.isFinite(time)) return timestampFrom(value);
   }
@@ -151,9 +168,23 @@ export const api = {
     }
     return request<Record<string, unknown>[]>(`/api/users/directory?${query}`);
   },
-  getIssues: (location?: { lat: number; lng: number }) => {
-    const query = location ? `?lat=${encodeURIComponent(location.lat)}&lng=${encodeURIComponent(location.lng)}` : '';
-    return request<Issue[]>(`/api/issues${query}`);
+  getVolunteers: () => request<Record<string, unknown>[]>('/api/users?role=volunteer'),
+  getIssues: (filters?: {
+    lat?: number;
+    lng?: number;
+    status?: Issue['status'] | Issue['status'][];
+    mine?: boolean;
+  }) => {
+    const query = new URLSearchParams();
+    if (filters?.lat !== undefined) query.set('lat', String(filters.lat));
+    if (filters?.lng !== undefined) query.set('lng', String(filters.lng));
+    if (filters?.status) {
+      query.set('status', Array.isArray(filters.status) ? filters.status.join(',') : filters.status);
+    }
+    if (filters?.mine !== undefined) query.set('mine', String(filters.mine));
+    const queryString = query.toString();
+    const suffix = queryString ? `?${queryString}` : '';
+    return request<Issue[]>(`/api/issues${suffix}`);
   },
   getIssue: (id: string) => request<Issue>(`/api/issues/${encodeURIComponent(id)}`),
   uploadImage: (file: File) => {
@@ -169,9 +200,13 @@ export const api = {
   approveIssue: (id: string) =>
     request<Issue>(`/api/issues/${encodeURIComponent(id)}/approve`, json('PATCH')),
   assignIssue: (id: string) =>
-    request<Issue>(`/api/issues/${encodeURIComponent(id)}/assign`, json('PATCH')),
+    request<Issue>(`/api/issues/${encodeURIComponent(id)}/accept`, json('PATCH')),
+  acceptIssue: (id: string) =>
+    request<Issue>(`/api/issues/${encodeURIComponent(id)}/accept`, json('PATCH')),
   assignVolunteer: (id: string, volunteerId: string) =>
-    request<Issue>(`/api/issues/${encodeURIComponent(id)}/assign-volunteer`, json('PATCH', { volunteerId })),
+    request<Issue>(`/api/issues/${encodeURIComponent(id)}/assign`, json('PATCH', { volunteerId })),
+  rejectIssue: (id: string) =>
+    request<Issue>(`/api/issues/${encodeURIComponent(id)}/reject`, json('PATCH')),
   completeIssue: (id: string, details: Pick<Issue, 'completionProofBlob' | 'volunteerNotes'>) =>
     request<Issue>(`/api/issues/${encodeURIComponent(id)}/complete`, json('PATCH', details)),
   verifyIssue: (id: string) =>
@@ -181,9 +216,11 @@ export const api = {
     request<Record<string, unknown>>('/api/notifications', json('POST', notification)),
   markNotificationRead: (id: string) =>
     request<Record<string, unknown>>(`/api/notifications/${encodeURIComponent(id)}/read`, json('PATCH')),
+  markAllNotificationsRead: () =>
+    request<{ modifiedCount: number }>('/api/notifications/read-all', json('PATCH')),
   deleteNotification: (id: string) =>
     request<void>(`/api/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  getAnalytics: () => request<Record<string, unknown>>('/api/analytics'),
+  getAnalytics: () => request<ApiAnalytics>('/api/analytics'),
   rebuildGeohashes: () =>
     request<{ updatedUsers: number; updatedIssues: number }>('/api/users/maintenance/geohashes', json('POST')),
 };
@@ -197,7 +234,7 @@ export function pollEvery<T>(
   let active = true;
   let inFlight = false;
   const poll = async () => {
-    if (!active || inFlight) return;
+    if (!active || inFlight || document.visibilityState === 'hidden') return;
     inFlight = true;
     try {
       const result = await load();
@@ -209,10 +246,15 @@ export function pollEvery<T>(
     }
   };
 
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') void poll();
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   void poll();
   const timer = window.setInterval(() => void poll(), intervalMs);
   return () => {
     active = false;
     window.clearInterval(timer);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   };
 }

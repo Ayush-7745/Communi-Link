@@ -1,8 +1,18 @@
+import type { ApiTimestamp } from "../services/api";
+
 export interface Notification {
     id?: string;
 
     userId: string;        // 🔥 WHO will see this
-    type: "issue-reported" | "task-assigned" | "task-completed" | "issue-resolved";
+    type:
+        | "issue-reported"
+        | "issue-approved"
+        | "issue-rejected"
+        | "task-assigned"
+        | "task-accepted"
+        | "task-completed"
+        | "issue-verified"
+        | "task-reassigned";
 
     title: string;
     message: string;
@@ -10,10 +20,5 @@ export interface Notification {
     issueId?: string;
 
     read: boolean;
-    createdAt: {
-        seconds: number;
-        nanoseconds: number;
-        toDate: () => Date;
-        toMillis: () => number;
-    } | Date | string;
+    createdAt: ApiTimestamp | Date | string;
 }

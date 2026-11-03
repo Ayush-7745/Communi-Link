@@ -4,6 +4,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { User, MapPin } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 import { api, pollEvery, resolveLocation } from '../../../services/api';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371;
@@ -16,7 +17,7 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 };
 
 export function LiveTracking() {
-  const { issues } = useIssues();
+  const { issues, issuesError, updateIssue } = useIssues();
   const { effectiveTheme } = useTheme();
   const isDark = effectiveTheme === 'dark';
   const { userProfile, currentUserLocation } = useUser();
@@ -25,27 +26,22 @@ export function LiveTracking() {
   const [volunteers, setVolunteers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!ngoLocation) {
-      setVolunteers([]);
-      return;
-    }
-
     return pollEvery(
-      () => api.getDirectory('volunteer', ngoLocation),
+      api.getVolunteers,
       (users) => setVolunteers(users.map((data) => {
         const location = data.location as { lat?: number; lng?: number } | undefined;
         return {
           ...data,
-          id: data.userId,
+          id: String(data.userId || ''),
           volLat: typeof location?.lat === 'number' ? location.lat : null,
           volLng: typeof location?.lng === 'number' ? location.lng : null,
         };
-      }))
+      }).filter((volunteer) => volunteer.id))
     );
   }, [ngoLocation?.lat, ngoLocation?.lng]);
 
-  const activeTasks = issues.filter(i => i.status === 'assigned' || i.status === 'completed');
-  const incomingIssues = issues.filter(i => i.status === 'pending' || i.status === 'approved');
+  const activeTasks = issues.filter(i => i.status === ISSUE_STATUS.ASSIGNED || i.status === ISSUE_STATUS.COMPLETED);
+  const incomingIssues = issues.filter(i => i.status === ISSUE_STATUS.PENDING || i.status === ISSUE_STATUS.APPROVED);
 
   const onTaskVolunteersIds = activeTasks.map(i => i.assignedVolunteerId);
 
@@ -60,6 +56,7 @@ export function LiveTracking() {
   return (
     <div className="space-y-6">
       <h1 className={`text-3xl ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Live Tracking</h1>
+      {issuesError && <p role="alert" className="text-sm text-red-600">{issuesError}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column */}
@@ -87,6 +84,15 @@ export function LiveTracking() {
                       <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> 📍 {typeof task.lat === 'number' ? task.lat.toFixed(4) : task.lat}, {typeof task.lng === 'number' ? task.lng.toFixed(4) : task.lng}</span>
                       <span className="flex items-center gap-1 text-purple-600"><User className="w-3 h-3" /> {volunteers.find(v => v.id === task.assignedVolunteerId)?.fullName || volunteers.find(v => v.id === task.assignedVolunteerId)?.name || task.assignedVolunteerId}</span>
                     </div>
+                    {task.status === ISSUE_STATUS.COMPLETED && (
+                      <button
+                        type="button"
+                        onClick={() => void updateIssue(task.id!, { status: ISSUE_STATUS.VERIFIED })}
+                        className="mt-3 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Verify
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -139,7 +145,7 @@ export function LiveTracking() {
             <span className="w-3 h-3 bg-blue-500 rounded-full inline-block"></span>
             Incoming Issues
           </h2>
-          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">{incomingIssues.filter(i => i.status === 'pending').length} pending</span>
+          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">{incomingIssues.filter(i => i.status === ISSUE_STATUS.PENDING).length} pending</span>
         </div>
 
         {incomingIssues.length === 0 ? (
@@ -150,8 +156,8 @@ export function LiveTracking() {
               <li key={task.id} className={`p-4 flex flex-col justify-between ${isDark ? 'bg-gray-700' : 'bg-gray-50'} rounded-lg border ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
                 <h3 className={`font-medium mb-3 ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{task.title}</h3>
                 <div className="flex gap-2 text-xs text-gray-500">
-                  <span className={`px-2 py-1 rounded-sm ${task.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                  <span className={`px-2 py-1 rounded-sm ${task.status === ISSUE_STATUS.PENDING ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {getIssueStatusPresentation(task.status).label}
                   </span>
                   <span className="px-2 py-1 bg-gray-200 text-gray-700 rounded-sm">{task.category}</span>
                   <span className="px-2 py-1 bg-gray-200 text-gray-700 rounded-sm">{task.urgency} urgency</span>

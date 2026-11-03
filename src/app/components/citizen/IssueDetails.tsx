@@ -3,6 +3,7 @@ import { useIssues } from '../../contexts/IssuesContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Issue } from '../../../types/issue';
 import { useUser } from '../../contexts/UserContext';
+import { getIssueStatusPresentation, ISSUE_STATUS } from '../../../utils/issueStatus';
 import { useState, useEffect } from 'react';
 import { api } from '../../../services/api';
 import { IssueImageGallery } from '../IssueImageGallery';
@@ -91,7 +92,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       },
     ];
 
-    if (issue.status === 'rejected') {
+    if (issue.status === ISSUE_STATUS.REJECTED) {
       steps.push({
         status: 'Rejected',
         date: 'Recently',
@@ -103,7 +104,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       return steps;
     }
 
-    if (issue.status === 'assigned' || issue.status === 'completed') {
+    if (issue.status === ISSUE_STATUS.ASSIGNED || issue.status === ISSUE_STATUS.COMPLETED) {
       steps.push({
         status: 'Assigned',
         date: issue.createdAt?.toDate().toLocaleDateString(),
@@ -123,13 +124,13 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       });
     }
 
-    if (issue.status === 'completed' || issue.status === 'verified') {
+    if (issue.status === ISSUE_STATUS.COMPLETED || issue.status === ISSUE_STATUS.VERIFIED) {
       steps.push({
-        status: 'Pending Verification',
+        status: getIssueStatusPresentation(ISSUE_STATUS.COMPLETED).label,
         date: issue.completedAt?.toDate().toLocaleDateString() || issue.createdAt?.toDate().toLocaleDateString(),
         description: 'Waiting for NGO to verify',
         icon: CheckCircle,
-        color: 'bg-yellow-500',
+        color: issue.status === ISSUE_STATUS.VERIFIED ? 'bg-green-500' : 'bg-yellow-500',
         completed: true,
       });
     } else {
@@ -143,10 +144,10 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       });
     }
 
-    if (issue.status === 'verified') {
+    if (issue.status === ISSUE_STATUS.VERIFIED) {
       steps.push({
-        status: 'Verified',
-        date: issue.updatedAt?.toDate().toLocaleDateString() || 'Recently',
+        status: getIssueStatusPresentation(ISSUE_STATUS.VERIFIED).label,
+        date: issue.verifiedAt?.toDate().toLocaleDateString() || issue.updatedAt?.toDate().toLocaleDateString() || 'Recently',
         description: 'Issue officially verified and closed',
         icon: CheckCircle,
         color: 'bg-green-500',
@@ -154,7 +155,7 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
       });
     } else {
       steps.push({
-        status: 'Verified & Closed',
+        status: getIssueStatusPresentation(ISSUE_STATUS.VERIFIED).label,
         date: 'Pending',
         description: 'Issue resolution verified',
         icon: CheckCircle,
@@ -185,21 +186,15 @@ export function IssueDetails({ issueId, onBack }: IssueDetailsProps) {
           <div className="flex-1">
             <h1 className={`text-2xl ${isDark ? 'text-gray-100' : 'text-gray-900'} mb-3`}>{issue.title}</h1>
             <div className="flex flex-wrap items-center gap-3">
-              <span className={`px-3 py-1 rounded-full text-sm ${issue.status === 'completed' ? 'bg-orange-100 text-orange-700' :
-                issue.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                  issue.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                    issue.status === 'pending' ? 'bg-amber-100 text-amber-800' :
-                      issue.status === 'approved' ? 'bg-green-100 text-green-700' :
+              <span className={`px-3 py-1 rounded-full text-sm ${issue.status === ISSUE_STATUS.COMPLETED ? 'bg-orange-100 text-orange-700' :
+                issue.status === ISSUE_STATUS.VERIFIED ? 'bg-emerald-100 text-emerald-700' :
+                  issue.status === ISSUE_STATUS.ASSIGNED ? 'bg-blue-100 text-blue-700' :
+                    issue.status === ISSUE_STATUS.PENDING ? 'bg-amber-100 text-amber-800' :
+                      issue.status === ISSUE_STATUS.APPROVED ? 'bg-green-100 text-green-700' :
                         'bg-slate-100 text-slate-700'
                 }`}>
-                {issue.status === 'verified' && <CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />}
-                {
-                  issue.status === 'verified' ? 'Verified' :
-                    issue.status === 'pending' ? 'Pending' :
-                    issue.status === 'assigned' ? 'In Progress' :
-                      issue.status === 'completed' ? 'Pending Verification' :
-                          issue.status
-                }
+                {issue.status === ISSUE_STATUS.VERIFIED && <CheckCircle className="inline w-4 h-4 mr-1" aria-hidden="true" />}
+                {getIssueStatusPresentation(issue.status).label}
               </span>
               <span className="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-700">
                 {issue.category}

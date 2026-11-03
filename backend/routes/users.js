@@ -2,6 +2,7 @@ import { Router } from 'express';
 import User from '../models/User.js';
 import { requireAdminClaim, requireRole } from '../middleware/auth.js';
 import { sendClientError } from '../utils/httpResponse.js';
+import { withApiId } from '../utils/issueLifecycle.js';
 
 const router = Router();
 const allowedProfileFields = [
@@ -44,6 +45,24 @@ function validLocation(location) {
     && parts.every((part) => Number.isFinite(Number.parseFloat(part.trim())));
   return !looksLikeCoordinates || Boolean(coordinates(value));
 }
+
+router.get('/', requireRole('ngo'), async (req, res, next) => {
+  try {
+    if (req.query.role !== 'volunteer') {
+      return sendClientError(req, res, 400, 'Only the volunteer list is available.', 'invalid_user_list_role');
+    }
+    const volunteers = await User.find({ role: 'volunteer' })
+      .select('userId role fullName name location skills availability')
+      .sort({ fullName: 1, name: 1 })
+      .lean();
+    res.json(volunteers.map((volunteer) => withApiId({
+      ...volunteer,
+      location: coordinates(volunteer.location) || volunteer.location,
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.post('/', async (req, res, next) => {
   try {
@@ -103,7 +122,7 @@ router.get('/me', async (req, res, next) => {
   try {
     const profile = await User.findOne({ userId: req.uid }).lean();
     if (!profile) return res.status(404).json({ error: 'profile_not_found' });
-    res.json(profile);
+    res.json(withApiId(profile));
   } catch (error) {
     next(error);
   }
@@ -131,7 +150,7 @@ router.patch('/me', requireRole('citizen', 'volunteer', 'ngo'), async (req, res,
       { $set: updates },
       { new: true, runValidators: true }
     ).lean();
-    res.json(profile);
+    res.json(withApiId(profile));
   } catch (error) {
     next(error);
   }
@@ -156,7 +175,7 @@ router.get('/directory', requireRole('ngo'), async (req, res, next) => {
         return point && distanceKm(center, point) <= 15;
       })
       : users;
-    res.json(nearbyUsers.map((user) => ({
+    res.json(nearbyUsers.map((user) => withApiId({
       ...user,
       location: coordinates(user.location) || user.location,
     })));
@@ -172,7 +191,7 @@ router.get('/by-id/:userId', requireRole('citizen', 'volunteer', 'ngo'), async (
       : 'userId role fullName name email phone profilePhoto location skills availability';
     const profile = await User.findOne({ userId: req.params.userId }).select(fields).lean();
     if (!profile) return res.status(404).json({ error: 'User profile not found.' });
-    res.json(profile);
+    res.json(withApiId(profile));
   } catch (error) {
     next(error);
   }
